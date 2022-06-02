@@ -40,7 +40,8 @@ button:hover {
 div[id*='análisis'] div[id*='encuesta'] > div[class*="chart-stage"]{overflow-y: auto !important;}
 div[id*='par'] div[id*='encuesta'] > div[class*="chart-stage"]{overflow-y: auto !important;}
 div[id*="modelamiento"] div[id*="análisis"] > div[class*="chart-stage"] {overflow-y: auto !important;}
-  
+div[id^="section-modelo"] > div:first-child > div.chart-shim { overflow: auto !important; }
+div[id^="section-modelo"] div.chart-stage { overflow: auto !important; }
   
 /* Style the tab */
 .tab {
@@ -147,7 +148,7 @@ encuesta_sin_NA <- encuesta[complete.cases(encuesta),]
 <!--#region Univariate analysis -->
 # Análisis de cada variable
 
-## Column {data-width=200}
+## {data-width=200}
 
 ### Variables de la encuesta
 
@@ -184,7 +185,7 @@ renderTable({
 })
 ```
 
-## Column {data-height=800}
+## {data-height=800}
 
 ### Gráfico asociado a la variable seleccionada 
 
@@ -254,7 +255,7 @@ renderPlotly({
 <!--#region Multivariate analysis -->
 # Relación entre cada par de variables
 
-## Column {data-width=222}
+## {data-width=222}
 
 ### Variables de la encuesta
 
@@ -354,7 +355,7 @@ renderPlotly({
 })
 ```
 
-## Column {data-width=778}
+## {data-width=778}
 
 ```{r}
 div(
@@ -587,9 +588,12 @@ obtener_p_valor <- function(variable_2,variable_3){
 
 # Modelamiento
 
-## Column {data-width = 500}
+## {data-width=500 .tabset}
 
-### Análisis respecto a las horas de estudio
+### Objetivo
+
+Nos interesa hallar qué variables de la data están
+más asociadas a la variable **horas-de-estudio**.
 
 <!--#region Modelo de variable 'horas de estudio' -->
 ```{r modelo-horas-de-estudio}
@@ -616,66 +620,61 @@ for(i in 1:length(indices_por_revisar)){
 gusta_stats_convertido <- unclass(factor(encuesta_sin_NA$`¿Gusta_estudiar_estadistica?`))
 ```
 
-<!-- Tab content -->
+### Modelo 1
 
-```{r}
-#| echo = FALSE
-
-xaringanExtra::use_panelset()
-```
-
-
-<div class="panelset">
-<div class="panel">
-<div class="panel-name">Modelo 1</div>
-<div>
 <h4>Stepwise regression</h4>
+
 ```{r, message=FALSE, echo=TRUE}
 variable_dependiente <- lm(Horas_de_estudio ~ 1, data = encuesta_sin_NA)
 todas_las_variables <- lm(Horas_de_estudio ~ .,data = encuesta_sin_NA)
 
 formula(todas_las_variables)
 ```
+
 <h4>Modelo</h4>
+
 ```{r,message=FALSE, echo=TRUE}
 modelo_regresion_1 <- step(variable_dependiente, direction = 'both', scope = formula(todas_las_variables))
 summary(modelo_regresion_1)
 ```
-</div>
-</div>
-<div class="panel">
-<div class="panel-name">Modelo 2</div>
-<div>
+
+### Modelo 2
+
 ```{r,message=FALSE, echo=TRUE}
 # The independent variables will be chosen based on p-value comparisons
 modelo_inicial <- lm(Horas_de_estudio ~ ., data = encuesta_sin_NA)
 
 library(olsrr)
 ```
+
 <h4>Forward stepwise regression</h4>
-```r
-modelo_2_forward <- ols_step_forward_p(modelo_inicial, penter = 0.05) # p-value to be considered in model
+
+```{r}
+modelo_2_forward <- ols_step_forward_p(modelo_inicial, prem = 0.1) # p-value to remain in model
 modelo_2_forward
 modelo_2_forward$model
 ```
+
 <h4>Backward stepwise regression</h4>
-```r
+
+```{r}
 modelo_2_backward <- ols_step_backward_p(modelo_inicial, prem = 0.1) # p-value to remain in model
 modelo_2_backward
 modelo_2_backward$model
 ```
+
 <h4>Stepwise regression</h4>
-```r
+
+```{r}
 modelo_2_stepwise <- ols_step_both_p(modelo_inicial, penter = 0.05, prem = 0.1)
 modelo_2_stepwise
 modelo_2_stepwise$model
 ```
-</div>
-</div>
-<div class="panel">
-<div class="panel-name">Modelo 3</div>
-<div>
+
+### Modelo 3
+
 <h4>Verificación</h4>
+
 ```{r,message=FALSE, echo=TRUE}
 data_regresion <- data.frame(
   encuesta_sin_NA$Horas_de_estudio,
@@ -686,16 +685,16 @@ data_regresion <- data.frame(
 colnames(data_regresion) <- c("horas_de_estudio","gusta_estudiar_stats","gusta_tocar_instrumento")
 head(data_regresion)
 ```
+
 <h4>Modelo</h4>
+
 ```{r,message=FALSE, echo=TRUE}
 modelo_regresion <- lm(horas_de_estudio ~ gusta_tocar_instrumento + gusta_estudiar_stats, data_regresion)
 summary(modelo_regresion)
 ```
-</div>
-</div>
-<div class="panel">
-<div class="panel-name">Predicciones</div>
-<div>
+
+### Predicciones
+
 ```{r, tabla-resumen, echo = TRUE}
 prediccion_horas_de_estudio <- function(gusta_instru,gusta_stats) {
   return(10.855 - 8.200*gusta_instru + 17.317*gusta_stats)
@@ -720,12 +719,10 @@ colnames(prediccion) <- c(
   "Horas de estudio predicha"
 )
 ```
+
 ```{r, results="asis"}
 knitr::kable(prediccion, col.names = names(prediccion))
 ```
-</div>
-</div>
-</div>
 
 <!--#region pending to add -->
 <!-- # # Convertimos las dummy variables vía:  No: 0    Sí: 1
@@ -770,29 +767,7 @@ knitr::kable(prediccion, col.names = names(prediccion))
 # modelo_logistico_3 -->
 <!--#endregion-->
 
-<script>
-  // Declare all variables
-  let i, tabcontent, tablinks;
-  tabcontent = document.getElementsByClassName("tabcontent");
-  tablinks = document.getElementsByClassName("tablinks");
-
-  for(i=0; i<tablinks.length; i++) {
-    tablinks[i].addEventListener('click',function() {
-      for (i = 0; i < tabcontent.length; i++) {
-        tabcontent[i].style.display = "none";
-      }
-
-      for (i = 0; i < tablinks.length; i++) {
-        tablinks[i].className = tablinks[i].className.replace("active", "");
-      }
-
-      (tabcontent[this.dataset.dni]).style.display = 'block';
-      (tablinks[this.dataset.dni]).classList.add('active');
-    });
-  }
-</script>
-
-## Column {data-width = 500}
+## {data-width=500}
 
 ### Análisis respecto a si les gusta estudiar Estadística
 
@@ -872,7 +847,6 @@ probabilidad <- function(leer,aprender,bailar,horas_estudio) {
   return(exp(temp)/(1+exp(temp)))
 } 
 ```
-<!--#endregion-->
 
 <!--#region Interactive multiple logistic regression model -->
 <strong>
@@ -908,17 +882,19 @@ renderPlotly({
     bailar <- 0
   }
 
-  df_desordenado <- data.frame(probabilidad_gustar_stats = probabilidad(leer,aprender,bailar,datos_logistico$horas_estudio),
-                              horas_estudio =  encuesta_sin_NA$Horas_de_estudio,
-                              gustar_stats = as.vector(gusta_stats_convertido) - 1 )
+  df_desordenado <- data.frame(
+    probabilidad_gustar_stats = probabilidad(leer,aprender,bailar,datos_logistico$horas_estudio),
+    horas_estudio =  encuesta_sin_NA$Horas_de_estudio,
+    gustar_stats = as.vector(gusta_stats_convertido)-1
+  )
 
   df_ordenado <- with(df_desordenado,df_desordenado[order(gustar_stats,probabilidad_gustar_stats,horas_estudio),])
 
   # Separamos la data en un mismo data frame respecto a si le gusta o no Estadística
   data_predicha <- combinar_data_frames(
-                                        df_ordenado[1:(sum(0 == df_ordenado$gustar_stats)),],
-                                        df_ordenado[-(1:(sum(0 == df_ordenado$gustar_stats))),]
-                                      )
+    df_ordenado[1:(sum(0 == df_ordenado$gustar_stats)),],
+    df_ordenado[-(1:(sum(0 == df_ordenado$gustar_stats))),]
+  )
 
   colnames(data_predicha)[1:3] <- c("proba_gustar_stats_0","horas_estudio_0","gustar_stats_0")
   colnames(data_predicha)[4:6] <- c("proba_gustar_stats_1","horas_estudio_1","gustar_stats_1")
@@ -927,39 +903,57 @@ renderPlotly({
   dominio <- seq(0,60,0.5)
 
   data_predicha <- combinar_data_frames(
-                                        data_predicha,
-                                        data.frame(dominio,proba_predicha=probabilidad(leer,aprender,bailar,dominio))
-                                      )
+    data_predicha,
+    data.frame(
+      dominio, 
+      proba_predicha = probabilidad(leer,aprender,bailar,dominio)
+    )
+  )
 
   ## Graficamos
   # No le gusta Estadística
-  fig <- plot_ly(data=data_predicha, x=~horas_estudio_0,y=~proba_gustar_stats_0,
-                name='\n\nEncuestados que no\nles gusta Estadística\n\n\n'
-                )
+  fig <- plot_ly(
+    data = data_predicha, x=~horas_estudio_0,y=~proba_gustar_stats_0,
+    name = '\n\nEncuestados que no\nles gusta Estadística\n\n\n'
+  )
 
   fig <- fig %>% layout(
-                        title="¿Le gusta estudiar Estadística?",
-                        xaxis=list(title='Horas de estudio',range=c(0,5+max(encuesta_sin_NA$Horas_de_estudio))),
-                        yaxis=list(title="Probabilidad predicha de que le gusta Estadística",
-                                  range=c(0,1))
-                        ) 
+    title = "¿Le gusta estudiar Estadística?",
+    xaxis = list(
+      title = 'Horas de estudio',
+      range = c(0,5+max(encuesta_sin_NA$Horas_de_estudio))
+    ),
+    yaxis = list(
+      title="Probabilidad predicha de que le gusta Estadística",
+      range=c(0,1)
+    )
+  ) 
 
   fig <- fig %>% add_trace(
-                          text = ~paste("Horas de estudio: ",round(horas_estudio_0,2),"\nProbabilidad: ",round(proba_gustar_stats_0,2),sep=''),
-                          hoverinfo = 'text',marker=list(size=7)
-                          )
+    text = ~paste("Horas de estudio: ",round(horas_estudio_0,2),"\nProbabilidad: ",round(proba_gustar_stats_0,2),sep=''),
+    hoverinfo = 'text', marker=list(size=7)
+  )
 
 
   # Le gusta Estadística
-  fig <- fig %>% add_trace(x=~horas_estudio_1,y=~proba_gustar_stats_1,
-                          name='\n\nEncuestados que sí\nles gusta Estadística\n\n\n',
-                          text = ~paste("Horas de estudio: ",round(horas_estudio_1,2),"\nProbabilidad: ",round(proba_gustar_stats_1,2),sep=''),
-                          hoverinfo = 'text',marker=list(size=7)
-                          )
+  fig <- fig %>% add_trace(
+    x = ~horas_estudio_1, y = ~proba_gustar_stats_1,
+    name = '\n\nEncuestados que sí\nles gusta Estadística\n\n\n',
+    text = ~paste0(
+      "Horas de estudio: ", 
+      round(horas_estudio_1,2),
+      "\nProbabilidad: ",
+      round(proba_gustar_stats_1,2)
+    ),
+    hoverinfo = 'text', marker = list(size=7)
+  )
 
   # Probabilidad
-  fig <- fig %>% add_trace(x=~dominio,y=~proba_predicha, mode = "lines",
-                          name='Probabilidad predicha,\nconsiderando que la\nprobabilidad se acerca a\nuno cuando a la\npersona encuestada le\ngusta Estadística.',line=list(color='black',width=0.5))
+  fig <- fig %>% add_trace(
+    x = ~dominio, y = ~proba_predicha, mode = "lines",
+    name = 'Probabilidad predicha,\nconsiderando que la\nprobabilidad se acerca a\nuno cuando a la\npersona encuestada le\ngusta Estadística.',
+    line = list(color = 'black', width = 0.5)
+  )
 
   # Remove menu bar in the plotly graph
   fig <- fig %>% config(displayModeBar= FALSE)
@@ -971,7 +965,7 @@ renderPlotly({
 
 # Ubicación de los encuestados
 
-## Column {data-width = 1000}
+## {data-width = 1000}
 
 ### ¿Dónde se encuentran los estudiantes que respondieron la encuesta?
 
