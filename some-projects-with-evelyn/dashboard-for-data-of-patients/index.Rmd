@@ -1,0 +1,1808 @@
+---
+title: Info pacientes
+runtime: shiny
+lang: en
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+    theme:
+      version: 3
+      bootswatch: cosmo
+---
+
+```{r, setup, include = FALSE}
+library(DT)
+library(sass)
+library(dplyr)
+library(shiny)
+library(plotly)
+library(flexdashboard)
+library(shinydashboard)
+
+knitr::opts_chunk$set(echo = FALSE)
+
+# Fix DT bug
+options(DT.options = list(scrollY="100vh"))
+
+# Set the appropriate path for future data collection
+ruta <- "G:/.shortcut-targets-by-id/1dYzvu2oqhuQSUvdZHj0WWRDCLtie1R1P/VD/" 
+```
+
+```{scss, dashboard-styling}
+/* Import 'Dancing Script' Google font */
+@import url('https://fonts.googleapis.com/css2?family=Comforter&family=Dancing+Script&family=Lobster&display=swap');
+
+/* Hide chunk output from creating mesh */
+div[id$="dashboard-container"] div.tab-content > pre {
+  display: none;
+}
+
+/* 
+  Sidebar 
+*/
+div[id$="main-sidebar"]  {
+  /* Scrollable list of patients */
+  /* > div:nth-child(2) { overflow: auto; } */
+
+  /* Style header of patients' list section  */
+  h2 { 
+    padding: 5px;
+    font-size: 1.8rem;
+    text-align: center;
+    border-radius: 10px;
+    margin-bottom: 25px;
+    font-family: 'Dancing Script';
+    background-color: rgb(200, 240, 255);
+    background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.2)); 
+  } 
+
+/* Scrollable list of patients */
+  div.chart-stage { overflow: auto; }
+
+  /* Style background (desktop version) */
+  &.sidebar {
+    background-color: skyblue;
+    background-image: linear-gradient(to right, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.2)); 
+  }
+
+  /* Style background (mobile version) */
+  &.chart-wrapper {
+    background-color: skyblue;
+    background-image: linear-gradient(to right, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.2)); 
+  }
+}
+
+/* Hide label related to list of patients */
+#select_patient {
+  > label { display: none; }
+  div[class$="options-group"] { font-size: 1.75rem; }
+}
+
+/* 
+  Table of patients
+*/
+div[id$="tabla-resumen"] {
+  margin-left: 20px;
+  div.chart-shim, div.dataTables_scrollHead { 
+    overflow: auto !important;
+  }
+}
+/* Fix separation between table header and body */
+div.datatables > div > div.row:nth-child(2) {
+  width: fit-content;
+}
+
+/*
+  Valueboxes column
+*/
+div[id$="value-boxes"] {
+  font-size: 2rem;
+  display: flex;
+  justify-content: space-between; // space-around;
+
+  > div[class*="shiny"] {
+    padding: 0 20px 0 20px;
+    h3 { font-weight: 900; }
+
+    &:nth-child(2) {
+      box-shadow: 0 0 10px 0 black;
+      background-color: rgb(200, 240, 255);
+      background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.2)); 
+
+      ~ div[class*="shiny"] {
+        box-shadow: 0 0 10px 0 black;
+        background-color: rgb(140, 255, 165);
+
+        ~ div[class*="shiny"] {
+          box-shadow: 0 0 10px 0 black;
+          background-color: rgb(200, 240, 255);
+
+          ~ div[class*="shiny"] {
+            background-color: rgba(255, 0, 0, 0.75); 
+            box-shadow: 0 0 10px 0 red;
+            h3 { color: white; }
+          }
+        }
+      }
+    }
+  }
+}
+/*
+  Thermal metrics section
+*/
+[id $= "métricas-térmicas"] > div > div > div[class*="shiny"]:nth-child(2) {
+  font-size: 2rem;
+  margin-right: 10px;
+  padding: 10px 20px 20px 20px;
+  box-shadow: 0 0 10px 0 black;
+  background-color: rgb(200, 240, 255);
+  background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.2)); 
+}
+div[id$="estadísticas"] {
+  div.chart-shim { overflow: auto; }
+  div[id$="thermal_stats"] div.radio {
+    font-size: 1.75rem;
+    margin-bottom: 20px; 
+  }
+}
+
+/*
+  Images section
+*/
+div[id$="imágenes"] {
+  font-size: 2rem;
+  div[class*="shiny-input"]:nth-child(2) {
+    h3 { font-weight: 900; }
+    margin-right: 20px;
+    padding: 10px 20px 20px 20px;
+    box-shadow: 0 0 10px 0 black;
+    background-color: rgb(200, 240, 255);
+    background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.2)); 
+  }
+
+  // Style cells where images are displayed
+  > div > div > div > div.chart-stage.chart-stage-flex {
+    padding: 0;
+    box-shadow: 0px 5px 10px 5px;
+    background-color: lightslategray;
+    background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.2)); 
+  // Style img HTML element
+    > div > div > img {
+      display: block;
+      margin-left: auto;
+      margin-right: auto;
+      // Style alt attribute
+      color: rgba(240, 0, 0, 0.5);
+      font-size: 4rem;
+    }
+  }
+  }
+```
+
+```{r, static-folders-of-patients}
+#| cache: true
+#| cache.lazy: false
+#| include: false
+#| warning: false
+#| message: false
+
+# Only select the actual folders of patients
+patient_folders <- 
+  Filter(
+    function(file) {
+      # Check for "20XXMMDD_" initial name
+      boolean <- 
+        stringr::str_sub(file, 9, 9) == "_"
+      
+      # Check that file has no extension (".")
+      boolean <-
+        boolean & !grepl(".", file, fixed = TRUE) 
+
+      return(boolean)
+    },
+    dir(path = ruta, pattern = "_")
+  )
+
+# Separate date and patient code into a data frame
+patient_folders <-
+  do.call(
+    rbind.data.frame, 
+    strsplit(patient_folders, split= "_")
+  ) %>% select(1:2)
+
+colnames(patient_folders) <- c("compact_date", "code")
+
+# Create a new column with the date formatted
+patient_folders <-
+  patient_folders %>%
+    mutate(formatted_date = 
+      stringr::str_sub(compact_date, 1, 8) %>%
+        strsplit(split = "") %>%
+        sapply(
+          function (date) {
+            year  <- paste(date[1:4], collapse = "")
+            month <- paste(date[5:6], collapse = "")
+            day   <- paste(date[7:8], collapse = "")
+            
+            # Recommended format for dates
+            paste0(year, "-", month, "-", day)
+          }
+        ) %>% as.Date()
+    ) %>%
+  # Sort data frame's rows starting from earliest date
+  arrange(formatted_date) 
+
+# Create a new column with the date abbreviated
+patient_folders <-
+  patient_folders %>%
+    mutate(Date = format(formatted_date, format = "%d %b %Y"))
+
+# Convert the codes which contain the patient's name
+# The criteria we will use in order to determine
+# that a patient's code does not need to be converted is
+# that the code's first character is "0" or 
+# the first two characters are letters in uppercase.
+patient_folders$private_code <- patient_folders$code
+
+for (index in 1:nrow(patient_folders)) {
+  # Set seed to generate equal number for repeated patient code
+  set.seed(nchar(patient_folders$code[index]))
+  patient_folders$code[index] <- ifelse(
+    # Check if first letter is "0"
+    stringr::str_sub(patient_folders$code[index], 1, 1) == "0" |
+    # Check if first two letters are letters in uppercase
+    stringr::str_detect(stringr::str_sub(patient_folders$code[index], 1, 2), "^[:upper:]+$"),
+    patient_folders$code[index],
+    # Convert code to a private one
+    paste0(
+      "TMP00", # temporary code start
+      sample(1:99, 1),  # random integer
+      # Pick first letter of name and last name
+      which(
+        sapply(
+          unlist(strsplit(patient_folders$code[index], "")),
+          function(letter) { stringr::str_detect(letter, "^[:upper:]+$") }
+        )
+        == TRUE
+      ) %>% names() %>% paste(collapse = "")
+    )
+  )
+}
+
+# Define function to check for standard folders 11, 15, 16 and 17
+check_folders <- function(pass, folder) {
+  # Return TRUE represents the presence of the 
+  # important file(s) in the relevant folder
+  if (folder == 11) {
+    return(
+      all(c(
+        length(dir(
+          path = paste0(ruta, pass, "/11_Texturing/"),
+          pattern = "texturedMesh.obj"  # main file
+        )) > 0,
+        length(dir(
+          path = paste0(ruta, pass, "/11_Texturing/"),
+          pattern = "wound_segmented_manually.ply"
+        )) > 0
+      ))
+    )
+  }
+  if (folder == 15) {
+      return(
+        length(dir(
+          path = paste0(ruta, pass, "/15_Final3DModel/"),
+          pattern = "RS_Thermal3D_v0Comb_S3K.ply"
+        )) > 0
+      )
+  }
+
+  if (folder == 16) {
+      return(
+        length(dir(
+          path = paste0(ruta, pass, "/16_AdditionalObjects/"),
+          pattern = "RS_1_woundbed_surface.ply"
+        )) > 0
+      )
+  }
+  if (folder == 17) {
+    return(
+      all(c(
+        length(dir(
+          path = paste0(ruta, pass, "/17_Metrics/"),
+          pattern = "GeometricalMetrics.csv"  # main file
+        )) > 0,
+        length(dir(
+          path = paste0(ruta, pass, "/17_Metrics/"),
+          pattern = "ThermalMetrics.csv"
+        )) > 0
+      ))
+    )
+  }
+}
+
+# Check if the folders 11, 15, 16 and 17, 
+# besides their important files, are present
+patient_folders$pass <-
+  paste0(patient_folders$compact_date, "_", patient_folders$private_code)
+patient_folders$public_pass <-
+  paste0(patient_folders$compact_date, "_", patient_folders$code)
+
+for( folder in c(11, 15, 16, 17) ) {
+  patient_folders[, paste0("folder_", folder)] <-
+    as.factor(
+      ifelse(
+        sapply(patient_folders$pass, 
+          function (pase) { check_folders(pase, folder) }
+        ),
+        "Yes",
+        "No"
+      )
+    )
+}
+
+# Assign colors to presence or absence of main folders
+patient_folders$colores <- 
+  ifelse(
+    (patient_folders$folder_11 == "No") & (patient_folders$folder_11 == "No"),
+    "red", ifelse(patient_folders$folder_17 == "Yes",
+      "blue", "purple"
+    )
+  )
+
+# :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+# # Calculate the geometric metrics "largo" and "ancho"
+# # for every (possible) date and patient in the dataset
+# patient_folders$largo <- rep(as.numeric(NA), nrow(patient_folders))
+# patient_folders$ancho <- rep(as.numeric(NA), nrow(patient_folders))
+# for (i in 1:nrow(patient_folders)) {
+#   # Case where the relevant geometric metrics can be calculated
+#   if (patient_folders$folder_16[i] == "Yes") {
+#     wound <- 
+#       Rvcg::vcgPlyRead(
+#         paste0(
+#           ruta, patient_folders$pass[i],
+#           "/16_AdditionalObjects/RS_1_woundbed_surface.ply"
+#         )
+#       )
+#     # Get the lengths of the wound
+#     source('../R_PCA_LargoHerida.R', encoding = 'UTF-8', local = TRUE)
+#     patient_folders$largo[i] <- round(dist1, 1)
+#     patient_folders$ancho[i] <- round(dist2, 1)
+#   }
+# }
+# :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+# :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+# Extreamos data de GeometricalMetrics.csv
+patient_folders[, c(
+  "area_WB", "area_PW", "length_WB", "width_WB", 
+  "depth_WB", "length_geo_WB", "width_geo_WB "
+)] <- rep(as.numeric(NA), nrow(patient_folders))
+
+for (visit_index in 1:nrow(patient_folders)) {
+  try({
+    patient_folders[visit_index, c(
+      "area_WB", "area_PW", "length_WB", "width_WB", 
+      "depth_WB", "length_geo_WB", "width_geo_WB "
+    )] <- read.csv(
+      paste0(
+        ruta, patient_folders$pass[visit_index], 
+        "/17_Metrics/GeometricalMetrics.csv"
+      ),
+      header = FALSE, sep = ","
+    ) %>% select(2) %>% pull() %>% round(3)
+  })
+}
+# :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+# Add columns related to difference between consecutive dates
+patient_folders_full <- patient_folders[1,]
+patient_folders_full$difference_days <- NA
+patient_folders_full$diff_days_level <- NA
+
+for ( patient_code in unique(patient_folders$code) ) {
+  temp_data_frame <-
+    patient_folders %>%
+      filter(code == patient_code) %>%
+      # Difference (in days) between consecutive dates
+      mutate(difference_days = c(0, diff(formatted_date))) %>%
+      # Categorize the difference between consecutive dates
+      mutate(diff_days_level = 
+        factor(
+          sapply(
+            difference_days,
+            function (diff) {
+              if (0 <= diff & diff < 7)    return("[0; 7)")
+              if (7 <= diff & diff < 14)   return("[7; 14)")
+              if (14 <= diff & diff < 21)  return("[14; 21)")
+              if (21 <= diff & diff < 30)  return("[21; 30)")
+              if (30 <= diff)              return("[30; +Inf)")
+              }
+          ),
+          levels = c("[0; 7)", "[7; 14)", "[14; 21)", "[21; 30)", "[30; +Inf)")
+        )
+      )
+  patient_folders_full <- rbind(patient_folders_full, temp_data_frame)
+}
+# Update patient_folders variable
+patient_folders <- patient_folders_full[-1,]
+rownames(patient_folders) <- 1:nrow(patient_folders)
+patient_folders$diff_days_level <- as.factor(patient_folders$diff_days_level)
+
+# Create column with days since first consultation registered
+patient_folders <- 
+  patient_folders %>%
+    mutate(
+      days_since_earliest_consultation =
+        sapply(
+          1:nrow(patient_folders),
+          function (row) {
+            # Get the first date of the patient
+            temp_min <- min(
+              patient_folders %>%
+                filter(code == patient_folders$code[row]) %>%
+                select(formatted_date) %>%
+                pull()
+            )
+            # Return the current difference in days
+            return(as.numeric(
+              patient_folders$formatted_date[row] - temp_min
+            ))
+          }
+        )
+    )
+
+# Convert the patient code to factor
+patient_folders <- patient_folders %>%
+  arrange(code) %>%
+  mutate(code_count = rep(as.numeric(NA), nrow(patient_folders)))
+  # %>%
+  # mutate(code = factor(code, levels = unique(as.character(code))))
+
+# Calculate number of consultations per patient
+for(patient_code in unique(patient_folders$code)) {
+  temporal <- patient_folders %>% filter(code == patient_code)
+  patient_folders$code_count[patient_folders$code == patient_code] <-
+    rep(nrow(temporal), nrow(temporal))
+}
+```
+
+```{r, add-variables-to-mainDB.RDS}
+#| cache: true
+#| cache.lazy: false
+#| include: false
+#| warning: false
+#| message: false
+
+## Create columns for variables to include in data frame
+patient_folders[, c(
+  "numImgRGB", "numImgIR", "describerPreset", "sfm_scene_RMSE", "scale_factor"
+)] <- rep(NA, nrow(patient_folders))
+
+# Get names of columns from "sfm report"
+sfm_report_colnames <- readLines(paste0(ruta, patient_folders$pass[1], "/04_StructureFromMotion/sfm_report.html"), warn = FALSE)
+# Get the relevant information
+sfm_report_colnames <- 
+  stringr::str_split(
+    stringr::str_sub(
+      sfm_report_colnames[7], # HTML element with relevant info
+      start = 1,
+      end = stringr::str_locate(pattern = "<hr><table", sfm_report_colnames[7])[1]
+    ),
+    pattern = "<br>"
+  ) %>% unlist() 
+sfm_report_colnames <- sfm_report_colnames[-c(1, length(sfm_report_colnames))]
+# Clean the information (in string form) for data frame creation
+sfm_report_colnames <- stringr::str_replace(sfm_report_colnames, pattern = " #", replacement = "")
+sfm_report_colnames <- stringr::str_replace(sfm_report_colnames, pattern = "#", replacement = "")
+sfm_report_colnames <- sapply(stringr::str_split(sfm_report_colnames, pattern = ": "),`[[`, 1)
+# Add variables to main data frame
+patient_folders[, sfm_report_colnames] <- rep(NA, nrow(patient_folders))
+
+# Calculate the variable's values for each patient's visit
+for (index in 1:nrow(patient_folders)) {
+  ## Number of RGB images
+  try({
+    numImgRGB <- read.delim(paste0(ruta, patient_folders$pass[index], "/numImages.txt"))
+    patient_folders$numImgRGB[index] <- 
+      unlist(stringr::str_split(colnames(numImgRGB), ""))[-1] %>%
+        paste(collapse = "") %>% as.integer()
+  })
+
+  ## Number of infrared images
+  try({
+    numImgIR <- read.delim(paste0(ruta, patient_folders$pass[index], "/numImages_FlirCamera.txt"))
+    patient_folders$numImgIR[index] <- 
+      unlist(stringr::str_split(colnames(numImgIR), ""))[-1] %>%
+        paste(collapse = "") %>% as.integer()
+  })
+
+  ## Value of describer Preset
+  try({
+    describerPreset <- read.delim(
+      paste0(ruta, patient_folders$pass[index], "/01_FeatureExtraction/logfile.txt")
+    )
+    patient_folders$describerPreset[index] <-
+      stringr::str_sub(
+        describerPreset[1,],
+        start = 2 + which(
+          unlist(stringr::str_split(describerPreset[1,], ""))
+          == "="
+        ), 
+        end = -1L  # last character in string
+      )
+  })
+
+  ## SFM report
+  try({
+    sfm_report <- readLines(paste0(ruta, patient_folders$pass[index], "/04_StructureFromMotion/sfm_report.html"), warn = FALSE)
+    # Get the relevant information
+    sfm_report <- 
+      stringr::str_split(
+        stringr::str_sub(
+          sfm_report[7], # HTML element with relevant info
+          start = 1,
+          end = stringr::str_locate(pattern = "<hr><table", sfm_report[7])[1]
+        ),
+        pattern = "<br>"
+      ) %>% unlist() 
+    sfm_report <- sfm_report[-c(1, length(sfm_report))]
+
+    # Clean the information (in string form) for data frame creation
+    sfm_report <- stringr::str_replace(sfm_report, pattern = " #", replacement = "")
+    sfm_report <- stringr::str_replace(sfm_report, pattern = "#", replacement = "")
+
+    # Display relevant information in data frame form
+    sfm_report_df <- data.frame()
+    for (i in 1:length(sfm_report)) {
+      column_row_info <- stringr::str_split(sfm_report[i], pattern = ": ")[[1]]
+      sfm_report_df[1, paste("sfm_report", column_row_info[1])] <- column_row_info[2]
+    }
+    patient_folders[index, sfm_report_colnames] <- sfm_report_df[1,]
+  })
+
+  ## SfM Scene RMSE
+  # Extract value of "maxReprojectionError"
+  try({
+    sfm_scene_RMSE  <- read.delim(paste0(ruta, patient_folders$pass[index], "/04_StructureFromMotion/logfile.txt"))
+    patient_folders$sfm_scene_RMSE[index] <-
+      stringr::str_split(
+        sfm_scene_RMSE[,1][
+          which(
+            (grepl("maxReprojectionError", sfm_scene_RMSE[,1], fixed = TRUE) == TRUE)
+            == TRUE
+          )
+        ]
+        , pattern = "= "
+      ) %>% unlist() %>% tail(n = 1) %>% as.numeric()
+  })
+
+  ## ScaleFactor
+  try({
+    scale_factor <- read.delim(paste0(ruta, patient_folders$pass[index], "/ScaleFactor.txt"))
+    patient_folders$scale_factor[index] <- 
+      unlist(stringr::str_split(colnames(scale_factor), ""))[-1] %>%
+        paste(collapse = "") %>% as.numeric()
+  })
+}
+
+# Fix variable types in patient_folders
+for (columna in sfm_report_colnames) {
+  patient_folders[, columna] <- as.numeric(patient_folders[, columna])
+}
+```
+
+```{r, static-custom-mode-function}
+mode_for_factor <- function(x) {
+  if (length(x) > 0) {
+    temp <- unique(x)
+    temp[which.max(tabulate(match(x, temp)))]
+  } else {
+    return("No data")
+  }
+}
+```
+
+```{r, static-standard-date-format-function}
+# Function to change date format to "day month year"
+standard_date_format <- 
+  function(date) {
+    year  <- paste(date[1:4], collapse = "")
+    month <- paste(date[5:6], collapse = "")
+    day   <- paste(date[7:8], collapse = "")
+    
+    format(
+      # Recommended date format
+      as.Date(paste0(year, "-", month, "-", day)),
+      # Alternative date format
+      format = "%d %b %Y"
+    )
+  }
+```
+
+# Consultations' stats {data-icon="fa-calendar-alt" data-orientation=rows}
+
+## {data-height=200}
+
+### 
+
+```{r, total-visits, message=FALSE, warning=FALSE}
+flexdashboard::valueBox(
+  value = nrow(patient_folders), color = "#6bf772e8",
+  icon = "fa-user-plus", caption = "Total visits"
+)
+```
+
+### 
+
+```{r, total-patients, message=FALSE, warning=FALSE}
+flexdashboard::valueBox(
+  value = patient_folders %>% select(code) %>% unique() %>% nrow(),
+  color = "#6bf772e8", icon = "fa-user-plus", caption = "Total patients"
+)
+```
+
+### 
+
+```{r, visits-fully-processed, message=FALSE, warning=FALSE}
+flexdashboard::valueBox(
+  value = patient_folders %>% filter(colores == "blue") %>% nrow(),
+  color = "orange", icon = "fa-user-plus", caption = "Visits completely processed"
+)
+```
+
+### 
+
+```{r, total-patients-processed, message=FALSE, warning=FALSE}
+flexdashboard::valueBox(
+  value = patient_folders %>% filter(colores == "blue") %>% select(code) %>% unique() %>% nrow(),
+  color = "orange", icon = "fa-user-plus", caption = "Total patients processed"
+)
+```
+
+## {data-height=800 .tabset}
+
+### Moda sobre consultas
+
+```{r, static-barplot-difference-days-mode}
+#| cache: true
+
+# Create frequency table of modes
+visits_mode_table <- 
+  prop.table(
+    table(
+      patient_folders %>%
+        group_by(code) %>%
+        # Do not consider the value zero we added in difference_days column
+        summarize(mode_diff_days = mode_for_factor(diff_days_level[-1])) %>%
+        filter(mode_diff_days != "No data") %>%
+        pull(mode_diff_days)
+    )
+  ) 
+# Create barplot
+plot_ly(
+  x = names(visits_mode_table),
+  y = round(visits_mode_table, 3),
+  type = "bar"
+) %>%
+  layout(
+    title = "Proporciones de modas de diferencias entre consultas",
+    yaxis = list(range=c(0, 1)),
+    xaxis = list(
+      categoryorder = "array",
+      categoryarray = c(
+        "[0; 7)", "[7; 14)", "[14; 21)", 
+        "[21; 30)", "[30; +Inf)"
+      )
+    )  
+  ) %>%
+  config(displayModeBar = FALSE)  
+```
+
+### Días entre consultas
+
+```{r, static-days-between-consultations}
+#| cache: true
+
+plot_ly(
+  data = patient_folders,
+  x = ~days_since_earliest_consultation,
+  y = ~code,
+  legendgroup = ~code,
+  color = ~code,
+  # colors = ~colores,
+  type = 'scatter',
+  mode = "markers",
+  mode = "lines+markers",
+  line = list(
+    color = "gray",
+    dash = 'dash',
+    width = 1.5
+  ),
+  marker = list(
+    color = ~colores, 
+    size = 6.5
+  )
+) %>%
+  # Axis details
+  layout(
+    title = "Presence of important files in folders 11 and 17: {11,17} (blue), {11} (purple),  {} (red)",
+    showlegend = TRUE,
+    xaxis = list(
+      title = "Days since earliest consultation",
+      range = c(
+        0, 
+        10 + max(patient_folders$days_since_earliest_consultation)
+      )
+    ), 
+    yaxis = list(
+      title = "",
+      categoryorder = "max descending"
+      # categoryorder = "total descending"
+      # categoryorder = "total ascending"
+    ),
+    # Vertical lines
+    shapes = 
+      (
+      function(shapes_list) {
+        # Set x values for vertical lines
+        week_values <- seq(7, max(patient_folders$days_since_earliest_consultation), 7)
+        month_values <- seq(30, max(patient_folders$days_since_earliest_consultation), 30)
+        
+        # Create list for plotly's vertical lines
+        shapes_list <- list()
+        
+        # Append all vertical lines needed
+        for (x_value in unique(c(week_values, month_values))) {
+          # Month values get red coloring; week values, blue
+          shapes_list[[length(shapes_list) + 1]] <-
+            list(
+              type = "line", 
+              y0 = 0, 
+              y1 = 1, 
+              yref = "paper",
+              x0 = x_value, 
+              x1 = x_value,
+              line = list(
+                color = ifelse(
+                  x_value%%30 == 0,
+                  "rgba(255, 0, 0, 0.35)",
+                  "rgba(0, 0, 255, 0.35)"
+                ),
+                dash = "dash"
+              )
+            )
+        }
+        # Return the list to be used for the vertical lines in Plotly
+        return(shapes_list)
+      }
+      )(NULL)
+  ) %>%
+  # Info on hover
+  add_trace(
+    text = ~paste0(
+      "Días: ", days_since_earliest_consultation,
+      "\nCódigo: ", code,
+      "\nNúm. consultas: ", code_count
+    ),
+    hoverinfo = 'text',
+    showlegend = FALSE
+  ) %>%
+  config(displayModeBar = FALSE)  
+```
+
+### Fecha de consultas
+
+```{r, static-dates-of-consultations}
+#| cache: true
+
+plot_ly(
+  data = patient_folders,
+  x = ~formatted_date,
+  y = ~code,
+  color = ~code,
+  legendgroup = ~code,
+  # colors = ~colores,
+  type = 'scatter',
+  mode = "lines+markers",
+  line = list(
+    color = "gray",
+    dash = 'dash',
+    width = 1.5
+  ),
+  marker = list(
+    color = ~colores, 
+    size = 6.5
+  )
+) %>%
+  # Axis details
+  layout(
+    title = "Presence of important files in folders 11 and 17: {11,17} (blue), {11} (purple),  {} (red)",
+    showlegend = TRUE,
+    xaxis = list(
+      title = "Dates of consultations",
+      range = c(
+        min(patient_folders$formatted_date),
+        10 + max(patient_folders$formatted_date)
+      )
+    ), 
+    yaxis = list(
+      title = "",
+      categoryorder = "min ascending"
+    ),
+    # Vertical lines
+    shapes = 
+      (
+      function(shapes_list) {
+        # Set x values for vertical lines
+        last_sunday <- Sys.Date() - lubridate::wday(Sys.Date())
+        x_values <- as.character(last_sunday - seq(0, 30, 7))
+        
+        # Create list for plotly's vertical lines
+        shapes_list <- list()
+        
+        # Append all vertical lines needed
+        for (x_value in x_values) {
+          shapes_list[[length(shapes_list) + 1]] <-
+            list(
+              type = "line", 
+              y0 = 0, 
+              y1 = 1, 
+              yref = "paper",
+              x0 = x_value,  # here is why x_values are strings
+              x1 = x_value,
+              line = list(
+                color = "rgba(0, 0, 255, 0.35)",
+                dash = "dash"
+              )
+            )
+        }
+        # Return the list to be used for the vertical lines in Plotly
+        return(shapes_list)
+      }
+      )(NULL)
+  ) %>%
+  # Info on hover
+  add_trace(
+    text = ~paste0(
+      "Fecha: ", Date,
+      "\nCódigo: ", code
+    ),
+    hoverinfo = 'text',
+    showlegend = FALSE
+  ) %>%
+  config(displayModeBar = FALSE)  
+```
+
+# Evolución {data-icon="fa-hourglass-start"}
+
+## {.tabset}
+
+### Largo de la herida
+
+```{r, static-evolucion-largo-herida-pacientes}
+#| cache: true
+
+# Set colors for patient's codes
+set.seed(123)
+code_colors <- randomcoloR::distinctColorPalette(k = length(unique(patient_folders$code)))
+
+plot_ly(
+  data = patient_folders,
+  x = ~days_since_earliest_consultation,
+  y = ~length_WB,
+  color = ~code,
+  colors = code_colors,
+  legendgroup = ~code,
+  type = 'scatter',
+  mode = "lines+markers",
+  line = list(width = 1.5),
+  marker = list(size = 7)
+) %>%
+  # Axis details
+  layout(
+    showlegend = TRUE,
+    xaxis = list(
+      title = "Days since earliest consultation",
+      range = c(
+        0,
+        10 + max(patient_folders$days_since_earliest_consultation)
+      )
+    ), 
+    yaxis = list(title = "Largo (cm)")
+  ) %>%
+  # Info on hover
+  add_trace(
+    text = ~paste0(
+      "Días: ", days_since_earliest_consultation,
+      "\nLargo: ", length_WB, " cm", 
+      "\nCódigo: ", code
+    ),
+    hoverinfo = 'text',
+    showlegend = FALSE
+  ) %>%
+  config(displayModeBar = FALSE)  
+```
+
+### Ancho de la herida
+
+```{r, static-evolucion-ancho-herida-pacientes}
+#| cache: true
+
+plot_ly(
+  data = patient_folders,
+  x = ~days_since_earliest_consultation,
+  y = ~width_WB,
+  color = ~code,
+  colors = code_colors,
+  legendgroup = ~code,
+  type = 'scatter',
+  mode = "lines+markers",
+  line = list(width = 1.5),
+  marker = list(size = 7)
+) %>%
+  # Axis details
+  layout(
+    showlegend = TRUE,
+    xaxis = list(
+      title = "Days since earliest consultation",
+      range = c(
+        0,
+        10 + max(patient_folders$days_since_earliest_consultation)
+      )
+    ), 
+    yaxis = list(title = "Ancho (cm)")
+  ) %>%
+  # Info on hover
+  add_trace(
+    text = ~paste0(
+      "Días: ", days_since_earliest_consultation,
+      "\nAncho: ", width_WB, " cm", 
+      "\nCódigo: ", code
+    ),
+    hoverinfo = 'text',
+    showlegend = FALSE
+  ) %>%
+  config(displayModeBar = FALSE)  
+```
+
+### Temperatura mediana herida
+
+```{r, static-get-thermic-evolution-data}
+#| cache: true
+
+# Get names of the stats for thermal calculations
+names_tm2 <- read.csv(
+  paste0(ruta, "20210514_0001", "/17_Metrics/ThermalMetrics.csv")
+) %>% select(1) %>% pull()
+# names_tm2 <- c("Media", "Mediana", "Max", "P95", "SD")
+
+rownames_tm2 <- c("Herida", "Bordes", "Perilesión", "Piel Normal", "Piel Referencia")
+
+patients_thermic_evolution <- data.frame(
+  fechas = as.Date(NA), measure_target = NA, 
+  measure_value = NA, code = NA
+)
+
+# Obtain code of patients for which the 
+# thermic calculation can be performed
+viable_patient_codes <- 
+  patient_folders %>%
+    group_by(code) %>%
+    summarize(percentage_non_missing = 
+      mean(folder_17 == "Yes")
+    ) %>%
+    filter(percentage_non_missing != 0) %>%
+    pull(code)
+
+
+for(patient_code in viable_patient_codes) {
+  temp_data_frame <-
+    patient_folders %>%
+      filter(code == patient_code & folder_17 == "Yes") %>%
+      select(pass, formatted_date)
+
+  # Data frame for values of the chosen thermal metric
+  thermic_evolution <- 
+    data.frame(
+      fechas = as.Date(NA), measure_target = NA, measure_value = NA
+    )
+
+  for (i in 1:nrow(temp_data_frame)) {
+    thermic_evolution_temp <-  
+      data.frame(
+        fechas = rep(temp_data_frame$formatted_date[i], length(rownames_tm2)),    
+        measure_target = rownames_tm2,
+        measure_value = rep(NA, length(rownames_tm2))
+      )
+
+    # Obtain the relevant thermic values 
+    tm_temp <- read.csv(paste0(ruta, temp_data_frame$pass[i], "/17_Metrics/ThermalMetrics.csv"))
+    tm2_temp <- t(tm_temp[, -1])
+    tm2_temp <- data.frame(round(tm2_temp, 1))
+    colnames(tm2_temp) <- names_tm2[1:ncol(tm2_temp)] # precaution if npoints column is missing
+
+    # Only consider the median temperatures
+    thermic_evolution_temp$measure_value <- tm2_temp[, "median"]
+
+    thermic_evolution <- rbind(thermic_evolution, thermic_evolution_temp)
+  }
+  # Remove extra row added
+  thermic_evolution <- thermic_evolution[-1,]
+  
+  # Only consider "Herida" and "Perilesión"
+  thermic_evolution <- thermic_evolution %>%
+    filter(measure_target %in% c("Herida", "Perilesión"))
+
+  # Add patient code
+  thermic_evolution$code <- rep(patient_code, nrow(thermic_evolution))
+
+  # Add rows to patients_thermic_evolution
+  patients_thermic_evolution <- rbind(patients_thermic_evolution, thermic_evolution)
+}
+
+# Remove extra row added 
+patients_thermic_evolution <- patients_thermic_evolution[-1,]
+
+# Note that patients_thermic_evolution is a data frame
+# with an even amount of columns, being its column
+# measure_target repetitions of the same pair of
+# values, "Herida" and "Perilesión", one after
+# the other. This will be useful later on.
+
+# Calculate again the days since first consultation
+patients_thermic_evolution <- 
+  patients_thermic_evolution %>%
+    mutate(
+      days_since_earliest_consultation =
+        sapply(
+          1:nrow(patients_thermic_evolution),
+          function (row) {
+            # Get the first date of the patient
+            temp_min <- min(
+              patients_thermic_evolution %>%
+                filter(code == patients_thermic_evolution$code[row]) %>%
+                select(fechas) %>%
+                pull()
+            )
+            # Return the current difference in days
+            return(
+              as.numeric(
+                patients_thermic_evolution$fechas[row] - temp_min
+              )
+            )
+          }
+        )
+    )
+```
+
+```{r, static-evolucion-temperatura-herida-pacientes}
+#| cache: true
+
+plot_ly(
+  data = filter(patients_thermic_evolution, measure_target == "Herida"),
+  x = ~days_since_earliest_consultation,
+  y = ~measure_value,
+  color = ~code,
+  colors = code_colors,
+  legendgroup = ~code,
+  type = 'scatter',
+  mode = "lines+markers",
+  line = list(width = 1.5),
+  marker = list(size = 7)
+) %>%
+  # Axis details
+  layout(
+    showlegend = TRUE,
+    xaxis = list(
+      title = "Days since earliest consultation",
+      range = c(
+        0,
+        10 + max(patient_folders$days_since_earliest_consultation)
+      )
+    ), 
+    yaxis = list(title = "Temperatura (°C)") 
+  ) %>%
+  # Info on hover
+  add_trace(
+    text = ~paste0(
+      "Días: ", days_since_earliest_consultation,
+      "\nTemperatura: ", measure_value, " °C", 
+      "\nCódigo: ", code
+    ),
+    hoverinfo = 'text',
+    showlegend = FALSE
+  ) %>%
+  config(displayModeBar = FALSE)  
+```
+
+### Temperatura mediana perilesión
+
+```{r, static-evolucion-temperatura-perilesion-pacientes}
+#| cache: true
+
+plot_ly(
+  data = filter(patients_thermic_evolution, measure_target == "Perilesión"),
+  x = ~days_since_earliest_consultation,
+  y = ~measure_value,
+  color = ~code,
+  colors = code_colors,
+  legendgroup = ~code,
+  type = 'scatter',
+  mode = "lines+markers",
+  line = list(width = 1.5),
+  marker = list(size = 7)
+) %>%
+  # Axis details
+  layout(
+    showlegend = TRUE,
+    xaxis = list(
+      title = "Days since earliest consultation",
+      range = c(
+        0,
+        10 + max(patient_folders$days_since_earliest_consultation)
+      )
+    ), 
+    yaxis = list(title = "Temperatura (°C)") 
+  ) %>%
+  # Info on hover
+  add_trace(
+    text = ~paste0(
+      "Días: ", days_since_earliest_consultation,
+      "\nTemperatura: ", measure_value, " °C", 
+      "\nCódigo: ", code
+    ),
+    hoverinfo = 'text',
+    showlegend = FALSE
+  ) %>%
+  config(displayModeBar = FALSE)  
+```
+
+### Diferencia de ambas temperaturas previas
+
+```{r, static-evolucion-diferencia-temperaturas-pacientes}
+#| cache: true
+
+# The difference between the median temperatures
+# calculated previously will be inserted in the
+# rows with measure_value "Herida" in a copy
+# of patients_thermic_evolution
+temp_data_frame <- patients_thermic_evolution
+
+# Calculate median temp. "Herida" - median temp. "Perilesión"
+for(index in seq(1, nrow(temp_data_frame), 2)) {
+  temp_data_frame$measure_value[index] <- 
+    round(
+      temp_data_frame$measure_value[index] -
+      temp_data_frame$measure_value[index + 1],
+      3
+    )
+}
+
+plot_ly(
+  data = filter(temp_data_frame, measure_target == "Herida"),
+  x = ~days_since_earliest_consultation,
+  y = ~measure_value,
+  color = ~code,
+  colors = code_colors,
+  legendgroup = ~code,
+  type = 'scatter',
+  mode = "lines+markers",
+  line = list(width = 1.5),
+  marker = list(size = 7)
+) %>%
+  # Axis details
+  layout(
+    showlegend = TRUE,
+    title = "Temperatura mediana de herida - temperatura mediana de perilesión",
+    xaxis = list(
+      title = "Days since earliest consultation",
+      range = c(
+        0,
+        10 + max(temp_data_frame$days_since_earliest_consultation)
+      )
+    ), 
+    yaxis = list(title = "Temperatura (°C)") 
+  ) %>%
+  # Info on hover
+  add_trace(
+    text = ~paste0(
+      "Días: ", days_since_earliest_consultation,
+      "\nTemperatura: ", measure_value, " °C", 
+      "\nCódigo: ", code
+    ),
+    hoverinfo = 'text',
+    showlegend = FALSE
+  ) %>%
+  config(displayModeBar = FALSE)  
+```
+
+# Métricas geométricas {data-icon="fa-address-card"}
+
+## {#value-boxes data-width=200}
+
+```{r, choose-patient}
+selectInput(
+  inputId = "select_patient",
+  label = "Código de paciente", 
+  choices = unique(patient_folders$code),
+  selected = "EC00286"
+)
+```
+
+```{r, shiny-mode-of-day-diffs}
+#| eval: true
+
+renderValueBox({
+  temp_data_frame <- 
+    patient_folders %>%
+      filter(code == input$select_patient)
+  
+  value <- 
+    temp_data_frame %>%
+      # Do not consider the value zero we added in difference_days column
+      summarize(mode_diff_days = mode_for_factor(diff_days_level[-1])) %>%
+      pull(mode_diff_days)
+
+  valueBox(
+    value,
+    "Moda respecto a categorías de días entre consultas",
+    icon = icon("hospital-alt"),
+    color = "aqua"
+  )
+})
+```
+
+```{r, shiny-numbers-of-dates}
+#| eval: true
+
+renderValueBox({
+  temp_data_frame <- 
+    patient_folders %>%
+      filter(code == input$select_patient)
+
+  valueBox(
+    value = nrow(temp_data_frame),
+    subtitle = "Número de fechas registradas del paciente",
+    color = "fuchsia"
+  )
+})
+```
+
+<script>
+  // Create function to dynamically change valuebox color
+  Shiny.addCustomMessageHandler(
+    'valueBoxColor',
+    function(color) {
+      document.querySelector(
+        'div[id$="value-boxes"] > div[class*="shiny"]:nth-child(2) ~ div[class*="shiny"] ~ div[class*="shiny"] ~ div[class*="shiny"]'
+      ).style.backgroundColor = color;
+    }
+  )
+  // Dynamically add title to image
+  // whenever it is the best view one
+  Shiny.addCustomMessageHandler(
+    'bestViewTitle',
+    function(title) {
+      document.querySelector(
+        "#RGB_image_1"
+      ).parentNode.parentNode
+      .previousSibling.innerText = title;
+      
+      document.querySelector(
+        "#IR_image_1"
+      ).parentNode.parentNode
+      .previousSibling.innerText = title;
+    }
+  )
+
+</script>
+
+```{r, shiny-wound-reduction-test}
+#| eval: true
+
+renderValueBox({
+  # Variables for reduction of wound
+  wound_reduction <- NULL  # TRUE stands for reduction occurrence 
+  largo_wound <- c(NA, NA)
+  ancho_wound <- c(NA, NA)
+
+  temp_data_frame <- 
+    patient_folders %>%
+      filter(code == input$select_patient) %>%
+      filter(folder_16 == "Yes") 
+
+  if(2 <= nrow(temp_data_frame)) {
+    dates_ranges <- temp_data_frame$formatted_date - temp_data_frame$formatted_date[1]
+    dates_ranges <- abs(dates_ranges - 90) <= 7
+    # Whenever the later enough date exists:
+    if (any(dates_ranges)) {
+      date_to_compare <- temp_data_frame$formatted_date[min(which(dates_ranges == TRUE))]
+      comparison_dates <- c(temp_data_frame$formatted_date[1], date_to_compare)
+      # Filter only both dates which will be compared
+      temp_data_frame <- temp_data_frame %>%
+        filter(formatted_date %in% as.Date(comparison_dates))
+      # Extract the geometric metrics
+      largo_wound <-  temp_data_frame$length_WB
+      ancho_wound <- temp_data_frame$width_WB
+      # Check if the wound has decreased enough in size
+      if ( (largo_wound[1] - largo_wound[2] > 2) & (ancho_wound[1] - ancho_wound[2] > 2) ) {
+        wound_reduction <- TRUE
+      } else {
+        wound_reduction <- FALSE
+      }
+    }
+  } 
+  # Display message about the wound's reduction or not
+  valueBox(
+    value = ifelse(is.null(wound_reduction), "Falta data", ifelse(wound_reduction, "Sí", "No")),
+    subtitle = "¿La herida se redujo suficiente alrededor de tres meses después?",
+    icon = icon("heartbeat"), 
+    color = "red"
+  )
+})
+```
+
+```{r, shiny-dynamic-valuebox-color-change}
+#| eval: true
+
+observeEvent(input$select_patient, {
+  # Variables for reduction of wound
+  wound_reduction <- NULL  # TRUE stands for reduction occurrence 
+  largo_wound <- c(NA, NA)
+  ancho_wound <- c(NA, NA)
+
+  temp_data_frame <- 
+    patient_folders %>%
+      filter(code == input$select_patient) %>%
+      filter(folder_16 == "Yes") 
+
+  if(2 <= nrow(temp_data_frame)) {
+    dates_ranges <- temp_data_frame$formatted_date - temp_data_frame$formatted_date[1]
+    dates_ranges <- abs(dates_ranges - 90) <= 7
+    # Whenever the later enough date exists:
+    if (any(dates_ranges)) {
+      date_to_compare <- temp_data_frame$formatted_date[min(which(dates_ranges == TRUE))]
+      comparison_dates <- c(temp_data_frame$formatted_date[1], date_to_compare)
+      # Filter only both dates which will be compared
+      temp_data_frame <- temp_data_frame %>%
+        filter(formatted_date %in% as.Date(comparison_dates))
+      # Extract the geometric metrics
+      largo_wound <-  temp_data_frame$length_WB
+      ancho_wound <- temp_data_frame$width_WB
+      # Check if the wound has decreased enough in size
+      if ( (largo_wound[1] - largo_wound[2] > 2) & (ancho_wound[1] - ancho_wound[2] > 2) ) {
+        wound_reduction <- TRUE
+      } else {
+        wound_reduction <- FALSE
+      }
+    }
+  } 
+  # Activate Javascript function
+  session$sendCustomMessage(
+    "valueBoxColor",
+    ifelse(is.null(wound_reduction), 
+      "rgba(255, 0, 0, 0.75)", 
+      ifelse(wound_reduction, 
+        "rgba(0, 0, 255, 0.5)", "rgb(255,69,0)"
+      )
+    )
+  )
+})
+```
+
+## {data-width=800}
+
+### Tabla resumen
+
+```{r, shiny-summary-table}
+#| eval: true
+
+DT::renderDataTable({
+  DT::datatable(
+    patient_folders %>%
+      filter(code == input$select_patient) %>%
+      # Only show the following columns
+      select(
+        Date, diff_days_level, difference_days,
+        length_WB, width_WB,
+        folder_11, folder_15, 
+        # folder_16,
+        folder_17
+      ),
+    
+    # Include filter box for each column
+    filter = "top", 
+
+    options = list(
+      pageLength = 10,
+      columnDefs = list(list(className = 'dt-center', targets = "_all"))
+    ),
+    colnames = c(
+      'Date', "Categories of dates differences",
+      "Days between consultations", "Largo herida (cm)", "Ancho herida (cm)",
+      '¿Are texturedMesh. obj and and wound_segmented_ manually.ply in folder 11?', 
+      '¿Is RS_Thermal3D_ v0Comb_S3K.ply in folder 15?',
+      # '¿Is RS_1_woundbed _surface.ply in folder 16?',
+      # '¿Is GeometricalMetrics.csv in folder 17?'
+      '¿Are geometric and themal metrics in folder 17?'
+    )
+  )
+})
+```
+
+# Métricas térmicas {data-icon="fa-clipboard-list"}
+
+## {data-width=150}
+
+```{r}
+selectInput(
+  inputId = "select_patient_2",
+  label = "Código de paciente", 
+  choices = unique(patient_folders$code),
+  selected = "EC00286"
+)
+```
+
+### Estadísticas
+
+```{r, thermic-table-column-names}
+div(
+  style = "margin: 0 0 10px 10px;",
+  radioButtons(
+    inputId = "thermal_stats",
+    label = "",
+    choices = names_tm2,
+    selected = names_tm2[1]
+  )
+)
+```
+
+## {data-width=850}
+
+### Evolución
+
+```{r, shiny-thermal-metrics-evolution}
+#| eval: true
+
+renderPlotly({
+  temp_data_frame <-
+    patient_folders %>%
+      filter(code == input$select_patient_2 & folder_17 == "Yes") %>%
+      select(pass, formatted_date)
+
+  # Data frame for values of the chosen thermal metric
+  thermic_evolution <- 
+    data.frame(
+      fechas = as.Date(NA), measure_target = NA, measure_value = NA
+    )
+
+  for (i in 1:nrow(temp_data_frame)) {
+    thermic_evolution_temp <-  
+      data.frame(
+        fechas = rep(temp_data_frame$formatted_date[i], length(rownames_tm2)),    
+        measure_target = rownames_tm2,
+        measure_value = rep(NA, length(rownames_tm2))
+      )
+
+    # Obtain the relevant thermic values 
+    tm_temp <- read.csv(paste0(ruta, temp_data_frame$pass[i], "/17_Metrics/ThermalMetrics.csv"))
+    tm2_temp <- t(tm_temp[, -1])
+    tm2_temp <- data.frame(round(tm2_temp, 1))
+    colnames(tm2_temp) <- names_tm2[1:ncol(tm2_temp)] 
+
+    thermic_evolution_temp$measure_value <- tm2_temp[, input$thermal_stats]
+
+    thermic_evolution <- rbind(thermic_evolution, thermic_evolution_temp)
+  }
+  # Remove extra row added
+  thermic_evolution <- thermic_evolution[-1,]
+
+  # Create the plot
+  set.seed(123)
+  plot_ly(
+    data = thermic_evolution,
+    x = ~fechas,
+    y = ~measure_value,
+    color = ~measure_target,
+    colors = randomcoloR::distinctColorPalette(20)[sample(1:20, length(rownames_tm2), replace = FALSE)],
+    mode = 'lines+markers',
+    marker = list(size = 10)
+  ) %>%
+  layout(
+    xaxis = list(title = 'Fechas'),
+    yaxis = list(title = 'Temperatura (°C)')
+  ) %>%
+  add_trace(
+    text = ~paste0(
+      "Fecha: ", sapply(fechas, standard_date_format),
+      "\nMedida: ", measure_value,
+      " °C"
+    ),
+    hoverinfo = 'text'
+  ) %>%
+  config(displayModeBar = FALSE)  
+})
+```
+
+# Imágenes {data-icon="fa-camera"}
+
+```{r, static-find-visits-with-best-view}
+#| cache: true
+#| include: false
+
+# Determine which visits contain a best view image
+visits_best_view <- data.frame(
+  public_pass = patient_folders$public_pass,
+  pass = patient_folders$pass,
+  has_best_view = sapply(
+    patient_folders$pass,
+    function (pase) {
+      length(dir(
+        path = paste0(
+          ruta, pase, "/15_Final3DModel/"
+        ),
+        pattern = "Summary_Dist_Angles.csv"
+      )) > 0
+    }
+  ) 
+)
+
+# Only filter visits with a best view image
+visits_best_view <- visits_best_view %>%
+  filter(has_best_view == TRUE) %>%
+  select(-has_best_view)
+
+# Get image name of best view for each patient
+visits_best_view$best_view_img <- 
+  sapply(
+    visits_best_view$pass,
+    function (pase) {
+      # Read csv with best image info
+      read.csv(
+        paste0(
+          ruta, pase, 
+          "/15_Final3DModel/Summary_Dist_Angles.csv"
+        ), 
+        header = TRUE, sep = ","
+      ) %>%
+      filter(selected == 1) %>% 
+      select(img) %>%
+      pull() %>%
+      as.character() # some img names are huge numbers
+    }
+  )
+
+# Unlist "best_view_img" column so that
+# character(0) vectors in it can be dropped, whenever
+# for that visit there is no image with a "selected" value 1
+visits_best_view <- visits_best_view %>%  
+  tidyr::unnest("best_view_img") %>%
+  filter(length(best_view_img) > 0)
+```
+
+## {data-width=200}
+
+```{r, static-choose-visit-for-images}
+selectInput(
+  inputId = "select_visit",
+  label = "Código de visita", 
+  choices = patient_folders$public_pass,
+  selected = patient_folders$public_pass[1]
+)
+```
+
+## {data-width=400}
+
+```{r, shiny-get-paths-of-images}
+#| eval: true
+
+observeEvent(input$select_visit, {
+  # Get two random RGB images, if there are any
+  ruta_imagen_RGB <- paste0(
+    ruta, input$select_visit, "/00__Inputs/1_RGBImages/FlirCamera/"
+  )
+
+  random_RGB_images <- NULL
+  try(random_RGB_images <- dir(path = ruta_imagen_RGB, pattern = ".jpg"))
+  validate(
+    need(
+      is.null(random_RGB_images) == FALSE, 
+      # Display custom error message
+      "No .jpg files found in respective 00__Inputs/1_RGBImages/FlirCamera/ folder"
+    )
+  )
+
+  if (length(random_RGB_images) == 1) {
+    ## Display only RGB image
+    output$RGB_image_1 <- renderImage({
+      list(
+        src = paste0(ruta_imagen_RGB, random_RGB_images[1]),
+        alt = "No image found.",
+        contentType = "image/jpeg",
+        height = 300
+      )
+    }, deleteFile = FALSE
+    )
+    ## Display theinfrared images related to the RGB image selected
+    ruta_imagen_IR <- paste0(
+      ruta, input$select_visit, "/00__Inputs/2_IRImages/"
+    )
+    output$IR_image_1 <- renderImage({
+      list(
+        src = paste0(ruta_imagen_IR, random_RGB_images[1]),
+        alt = "No image found.",
+        contentType = "image/jpeg",
+        height = 300
+      )
+    }, deleteFile = FALSE
+    )
+    ## Hide the other two images, via files that do not exist
+    output$RGB_image_2 <- renderImage({
+      list(
+        src = tempfile(), alt = "No image found.",
+        contentType = "image/jpeg", height = 300
+      )
+    }, deleteFile = FALSE
+    )
+    output$IR_image_2 <- renderImage({
+      list(
+        src = tempfile(), alt = "No image found.",
+        contentType = "image/jpeg", height = 300
+      )
+    }, deleteFile = FALSE
+    )
+  } else {
+    # There are at least two RGB images for this visit
+    if (input$select_visit %in% visits_best_view$public_pass) {
+      # Get name of image with best view
+      dynamic_best_view <- paste0(
+        visits_best_view[
+          which(visits_best_view$public_pass == input$select_visit),
+          "best_view_img"
+        ]
+        , ".jpg"
+      )
+      # Remove best view from sample
+      random_RGB_images <- random_RGB_images[
+        -which(random_RGB_images == dynamic_best_view)
+      ]
+      # Choose an image different than the one with best view
+      random_RGB_images <- random_RGB_images[
+        sample(1:length(random_RGB_images), 1)
+      ]
+      ## Display best view RGB image
+      output$RGB_image_1 <- renderImage({
+        list(
+          src = paste0(ruta_imagen_RGB, dynamic_best_view),
+          alt = "No image found.",
+          contentType = "image/jpeg",
+          height = 300
+        )
+      }, deleteFile = FALSE
+      )
+      ## Display random RGB image
+      output$RGB_image_2 <- renderImage({
+        list(
+          src = paste0(ruta_imagen_RGB, random_RGB_images[1]),
+          alt = "No image found.",
+          contentType = "image/jpeg",
+          height = 300
+        )
+      }, deleteFile = FALSE
+      )
+      # Display the infrared images related to the RGB sampled ones
+      ruta_imagen_IR <- paste0(
+        ruta, input$select_visit, "/00__Inputs/2_IRImages/"
+      )
+      ## Display infrared image of best view one
+      output$IR_image_1 <- renderImage({
+        list(
+          src = paste0(ruta_imagen_IR, dynamic_best_view),
+          alt = "No image found.",
+          contentType = "image/jpeg",
+          height = 300
+        )
+      }, deleteFile = FALSE
+      )
+      ## Display first quasi-random infrared image
+      output$IR_image_2 <- renderImage({
+        list(
+          src = paste0(ruta_imagen_IR, random_RGB_images[1]),
+          alt = "No image found.",
+          contentType = "image/jpeg",
+          height = 300
+        )
+      }, deleteFile = FALSE
+      )
+
+      # Change background color of images with best view
+      session$sendCustomMessage(
+        "bestViewTitle", "BEST VIEW"
+      )
+
+    } else {
+      # Change background color of images with best view
+      session$sendCustomMessage(
+        "bestViewTitle", ""
+      )
+
+      # Choose two random RGB images
+      random_RGB_images <- random_RGB_images[
+        sample(1:length(random_RGB_images), 2, replace = FALSE)
+      ]
+      ## Display first random RGB image
+      output$RGB_image_1 <- renderImage({
+        list(
+          src = paste0(ruta_imagen_RGB, random_RGB_images[1]),
+          alt = "No image found.",
+          contentType = "image/jpeg",
+          height = 300
+        )
+      }, deleteFile = FALSE
+      )
+      ## Display second random RGB image
+      output$RGB_image_2 <- renderImage({
+        list(
+          src = paste0(ruta_imagen_RGB, random_RGB_images[2]),
+          alt = "No image found.",
+          contentType = "image/jpeg",
+          height = 300
+        )
+      }, deleteFile = FALSE
+      )
+      # Display the infrared images related to the RGB sampled ones
+      ruta_imagen_IR <- paste0(
+        ruta, input$select_visit, "/00__Inputs/2_IRImages/"
+      )
+      ## Display first quasi-random infrared image
+      output$IR_image_1 <- renderImage({
+        list(
+          src = paste0(ruta_imagen_IR, random_RGB_images[1]),
+          alt = "No image found.",
+          contentType = "image/jpeg",
+          height = 300
+        )
+      }, deleteFile = FALSE
+      )
+      ## Display second quasi-random infrared image
+      output$IR_image_2 <- renderImage({
+        list(
+          src = paste0(ruta_imagen_IR, random_RGB_images[2]),
+          alt = "No image found.",
+          contentType = "image/jpeg",
+          height = 300
+        )
+      }, deleteFile = FALSE
+      )
+    }
+  }
+})
+```
+
+### 
+
+```{r, image-RGB-1}
+plotOutput("RGB_image_1")
+```
+
+###
+
+```{r, image-RGB-2}
+plotOutput("RGB_image_2")
+```
+
+## {data-width=400}
+
+###
+
+```{r, image-IR-1}
+plotOutput("IR_image_1")
+```
+
+###
+
+```{r, image-IR-2}
+plotOutput("IR_image_2")
+```

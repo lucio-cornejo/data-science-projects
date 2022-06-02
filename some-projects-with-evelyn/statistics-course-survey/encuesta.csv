@@ -1,0 +1,49 @@
+﻿fecha,Edad,Sexo,hermanos,anho_ingreso,distrito,nivel_ingles,gusta_leer,gusta_escucharmusica,gusta_verpeliculasoseries,gusta_aprenderalgonuevo,gusta_videojuegos,gusta_tocarinstrumentomusical,gusta_hacerdeporte,gusta_salirabailar,gusta_cocinar,gusta_estudiarestadistica,horas_estudio
+09-01-21 11:37,19,Masculino,1,2019,"La Perla, Callao",Intermedio.,No,Si,Si,Si,Si,No,Si,No,No,No,20
+09-01-21 11:39,21,Masculino,1,2019,Pueblo Libre,Avanzado.,Si,Si,Si,Si,Si,No,Si,No,No,No,3
+09-01-21 12:21,17,Masculino,4,2021,"Puno,Puno",Básico.,No,Si,Si,Si,Si,Si,No,No,No,No,0
+09-01-21 12:37,17,Femenino,1,2021,"Ventanilla, Callao",Básico.,Si,Si,Si,Si,No,No,No,Si,No,No,10
+09-01-21 13:03,17,Femenino,3,2021,Huncayo ,Intermedio.,Si,Si,Si,Si,No,No,No,No,No,Si,
+09-01-21 13:31,19,Femenino,3,2020,"Pueblo libre, Lima",Intermedio.,Si,Si,Si,Si,No,No,No,No,Si,Si,35
+09-01-21 14:08,21,Masculino,1,2019,Los Olivos,Básico.,No,No,Si,Si,Si,No,Si,No,No,Si,45
+09-01-21 15:03,20,Femenino,2,2020,"Los olivos, Lima",Básico.,Si,Si,Si,Si,No,No,Si,Si,Si,Si,31
+09-01-21 22:27,19,Femenino,2,2019,"Los olivos, Lima",Básico.,No,Si,Si,Si,Si,No,Si,Si,Si,No,10
+09-01-21 23:57,17,Femenino,6,2021,Ventanilla - Callao,Básico.,Si,Si,Si,Si,No,No,No,No,No,No,10
+09-02-21 1:22,18,Masculino,2,2020,Provincia: Trujillo/ Distrito: Trujillo,Avanzado.,No,Si,Si,Si,Si,Si,Si,No,No,Si,9
+09-02-21 11:15,20,Masculino,2,2019,SJL,Básico.,No,Si,Si,Si,Si,No,Si,Si,No,No,5
+09-02-21 22:30,21,Femenino,2,2019,"Comas, Lima",Avanzado.,No,Si,Si,Si,No,No,No,No,Si,No,18
+09-02-21 23:28,19,Femenino,0,2019,Huancayo,Básico.,Si,Si,Si,No,No,No,No,Si,No,No,3
+09-04-21 16:41,18,Femenino,1,2021,Miraflores- Lima,Intermedio.,Si,Si,Si,Si,Si,No,Si,Si,Si,No,12
+09-04-21 20:24,18,Masculino,1,2020,"Breña, Lima.",Intermedio.,No,Si,Si,Si,Si,Si,Si,Si,Si,No,4
+09-05-21 0:51,20,Masculino,5,2017,Lima,Básico.,No,Si,Si,Si,Si,No,Si,No,Si,No,5
+09-05-21 13:27,23,Masculino,3,2019,"La Victoria, Lima",Básico.,Si,Si,Si,Si,No,No,Si,No,Si,No,7
+09-06-21 11:45,20,Masculino,2,2019,"Mirflores, Lima",Avanzado.,Si,Si,Si,Si,Si,Si,Si,No,No,No,13
+09-06-21 13:50,18,Masculino,0,2020,"San Borja, Lima",Avanzado.,No,Si,Si,Si,Si,Si,No,No,No,No,8
+09-06-21 13:51,18,Femenino,2,2020,"Santiago de Surco, Lima",Avanzado.,Si,Si,Si,Si,No,Si,No,Si,Si,Si,10
+09-06-21 13:51,17,Masculino,4,2021,"puno,puno",Básico.,No,Si,Si,Si,Si,Si,No,No,No,No,0
+09-06-21 13:51,18,Masculino,0,2019,"Miraflores, Lima.",Avanzado.,Si,Si,Si,Si,Si,No,Si,Si,No,No,4
+09-06-21 13:51,20,Masculino,2,2018,"Huanuco, Huanuco",Básico.,Si,No,No,Si,Si,Si,Si,Si,No,Si,8
+09-06-21 13:51,20,Femenino,1,2019,"Cercado de Lima,Lima",Intermedio.,Si,Si,Si,Si,Si,Si,Si,Si,Si,Si,8
+09-06-21 13:51,17,Femenino,3,2021,Huancayo,Básico.,Si,Si,Si,Si,No,No,No,Si,No,Si,49
+09-06-21 13:51,23,Masculino,0,2017,"Barranco, Lima",Avanzado.,Si,Si,Si,Si,Si,No,Si,No,No,No,8
+09-06-21 13:51,20,Femenino,2,2020,"Lima, Chorrillos",Intermedio.,Si,Si,Si,Si,Si,No,Si,Si,No,Si,3
+09-06-21 13:51,18,Femenino,1,2020,"Carabayllo,Lima",Avanzado.,Si,Si,Si,Si,Si,Si,No,Si,Si,No,5
+09-06-21 13:51,16,Masculino,1,2021,"iquitos, Loreto",Intermedio.,No,No,Si,No,Si,No,Si,No,No,No,4
+09-06-21 13:52,17,Femenino,1,2021,"San Jerónimo, Cusco",Básico.,Si,Si,Si,Si,No,No,Si,Si,Si,Si,25
+09-06-21 13:52,23,Masculino,3,2017,CERCADO DE LIMA,Básico.,Si,No,Si,Si,No,No,Si,No,Si,No,10
+09-06-21 13:52,19,Femenino,1,2020,San Miguel,Avanzado.,Si,Si,Si,No,No,Si,No,Si,No,No,3
+09-06-21 13:52,20,Femenino,2,2018,"Independencia, Lima",Básico.,Si,Si,Si,Si,Si,No,No,No,No,No,15
+09-06-21 13:53,19,Masculino,1,2019,San Juan de Lurigancho,Básico.,Si,Si,Si,Si,Si,Si,Si,No,No,Si,10
+09-06-21 13:53,19,Masculino,2,2019,"Ica, Ica",Básico.,No,Si,Si,No,Si,No,No,No,No,No,5
+09-06-21 13:53,19,Masculino,1,2019,"San Isidro, Lima",Intermedio.,Si,Si,Si,Si,Si,Si,Si,No,Si,No,4
+09-06-21 13:53,17,Femenino,1,2020,"Lima, San Miguel",Intermedio.,Si,Si,Si,Si,No,No,No,Si,Si,No,5
+09-06-21 13:53,18,Masculino,1,2020,Breña,Intermedio.,No,Si,Si,Si,Si,Si,Si,Si,Si,No,5
+09-06-21 13:54,17,Femenino,1,2020,Lima,Intermedio.,Si,Si,Si,Si,No,No,No,Si,No,Si,40
+09-06-21 13:54,17,Femenino,1,2020,"El Agustino,Lima",Intermedio.,Si,Si,Si,No,Si,No,No,No,No,No,11
+09-06-21 13:55,19,Femenino,2,2019,"San Miguel, Lima",Básico.,Si,Si,Si,No,Si,No,No,No,No,No,15
+09-06-21 13:56,20,Masculino,2,2019,"Miraflores, Lima",Avanzado.,Si,Si,Si,Si,Si,Si,Si,No,No,Si,14
+09-06-21 13:59,19,Femenino,3,2019,"Wanchaq, Cusco",Avanzado.,Si,Si,Si,Si,Si,Si,Si,Si,Si,No,8
+09-06-21 14:02,19,Masculino,1,2019,"La Perla, Callao",Intermedio.,No,Si,Si,Si,Si,No,Si,No,No,No,20
+09-06-21 14:46,17,Femenino,2,2021,"Lima, Lima",Ninguno.,Si,Si,Si,Si,No,No,No,No,No,No,8
+09-07-21 13:36,20,Femenino,2,2020,San Borja,Intermedio.,Si,Si,Si,Si,No,Si,No,No,No,No,10
+09-07-21 14:14,20,Femenino,3,2020,"Comas, Lima",Básico.,Si,Si,Si,Si,Si,Si,Si,Si,Si,Si,50
