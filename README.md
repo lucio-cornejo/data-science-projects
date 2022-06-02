@@ -9,14 +9,18 @@ of Mgtr. Evelyn Gutierrez.
 ### Description of projects included
 
 <dl>
-  <dt><a href = "https://github.com/lucio-cornejo/data-science-projects/tree/main/some-projects-with-evelyn/dashboard-for-data-of-patients">dashboard-for-data-of-patients</a></dt>
+  <dt><a href = "https://github.com/lucio-cornejo/data-science-projects/tree/main/some-projects-with-evelyn/statistics-course-survey">Statistics course survey</a></dt>
   <dd>
     A group of statistics students was surveyed about things like, 
-    "age, "english level", "Do you enjoy reading?", "Do you like playing sports?",
+    "age", "english level", "Do you enjoy reading?", "Do you like playing sports?",
     etc. The objective of the analysis was to determine which of the variables present
     in the data were the best predictors for the number of hours a week that a surveyee
     spends studying; and, which variables in the dataset best predict if the surveyee
     enjoys learning Statistics.
+  </dd>
+  <dt><a href="https://github.com/lucio-cornejo/data-science-projects/tree/main/some-projects-with-evelyn/dashboard-for-data-of-patients">Dashboard for patients' data</a></dt>
+  <dd>
+      
   </dd>
 </dl>
 
