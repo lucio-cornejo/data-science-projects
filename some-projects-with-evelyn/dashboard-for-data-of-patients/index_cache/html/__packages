@@ -6,3 +6,6 @@ ggplot2
 plotly
 flexdashboard
 shinydashboard
+olsrr
+stringr
+leaflet
