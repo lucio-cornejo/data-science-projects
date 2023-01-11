@@ -1,0 +1,5 @@
+# Hide datasets or credentials used for Tidy Tuesday
+/tidy-tuesday-challenges/2023/*-week/dataset*
+/tidy-tuesday-challenges/2023/01-week/*credentials.csv
+
+# data-science-projects

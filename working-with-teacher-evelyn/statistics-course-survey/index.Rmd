@@ -1,0 +1,1096 @@
+---
+title: "Encuesta de un curso de Estadística"
+runtime: shiny
+output: 
+  flexdashboard::flex_dashboard:
+    theme: united
+    orientation: columns
+    vertical_layout: fill
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{css}
+.control-label{display: none !important;}
+
+.shiny-output-error-validation{font-size: 20px; color: red;}
+
+/* titles */
+.chart-title {
+  color: white !important;
+  font-size: 15px !important;
+  font-family: monospace !important;
+  background-color: rgb(255,0,0,0.5) !important;
+}
+#section-grafico-asociado-a-las-variables-seleccionadas > .chart-title {display: none;}
+
+/* tabla de estadísticos */
+tbody > tr > td:not([align='right']) {font-weight: bold !important;}
+
+/* buttons */
+#botones button {border-radius: 50px;}
+button:hover {
+  box-shadow: rgba(0.0.0,0.4) 0 4px 8px, rgba(0,0,0,03) 0 7px 13px -3px, #3c4fe0 0 -3px 0 inset;
+  transform: translateY(-2px);
+}
+
+/* Make some div sections scrollable */
+div[id*='análisis'] div[id*='encuesta'] > div[class*="chart-stage"]{overflow-y: auto !important;}
+div[id*='par'] div[id*='encuesta'] > div[class*="chart-stage"]{overflow-y: auto !important;}
+div[id*="modelamiento"] div[id*="análisis"] > div[class*="chart-stage"] {overflow-y: auto !important;}
+div[id^="section-modelo"] > div:first-child > div.chart-shim { overflow: auto !important; }
+div[id^="section-modelo"] div.chart-stage { overflow: auto !important; }
+  
+/* Style the tab */
+.tab {
+  overflow: hidden;
+  border: 1px solid #ccc;
+  background-color: #f1f1f1;
+}
+
+/* Style the buttons that are used to open the tab content */
+.tab button {
+  background-color: inherit;
+  float: left;
+  border: none;
+  outline: none;
+  cursor: pointer;
+  padding: 14px 16px;
+  transition: 0.3s;
+  border-right: 1px solid black;
+}
+
+/* Change background color of buttons on hover */
+.tab button:hover {
+  background-color: #ddd;
+}
+
+/* Create an active/current tablink class */
+.tab button.active {
+  background-color: #ccc;
+}
+
+/* Style the tab content */
+.tabcontent {
+  display: none;
+  padding: 6px 12px;
+  border: 1px solid #ccc;
+  border-top: none;
+}
+
+/* Display the first panel upon accessing the Modelamiento section
+#section-panel1 {
+  display: block;
+} */
+
+.leaflet-container {
+  width: 100%;
+  height: 100vh;
+}
+
+.leaflet-pane{
+  img{
+      position: absolute;
+  }
+}
+```
+
+```{r, load-data, include=FALSE}
+library(dplyr)
+library(shiny)
+library(plotly)
+library(flexdashboard)
+
+# Cargamos la data de la encuesta
+encuesta <- read.csv("encuesta.csv", encoding = "UTF-8")
+
+# Retiramos las columnas con las fechas de ingreso de la data y de los distritos
+encuesta <- encuesta[,-c(1,6)]
+
+# Nos aseguramos que R entienda el año de ingreso como una variable cualitativa,
+# pues sino más adelante surgirá un problema en algunos boxplots
+encuesta[,4] <- as.character(encuesta[,4])
+
+# Removemos el último punto en cada valor de la variable nivel_ingles
+for(i in 1:nrow(encuesta)){
+  encuesta$nivel_ingles[i] <- substr(encuesta$nivel_ingles[i],1,nchar(encuesta$nivel_ingles[i])-1)
+}
+
+# Corregimos las tildes en las variables relevantes
+for(i in 6:15){
+  for(j in 1:nrow(encuesta)){
+    if(encuesta[,i][j]=='Si'){encuesta[,i][j] <- "Sí"}
+  }
+}
+
+# Modificamos los nombres de algunas de las variables en "encuesta"
+colnames(encuesta) <- c(
+  "Edad","Sexo","Cantidad_de_hermanos",
+  "Anio_de_ingreso","Nivel_de_ingles",
+  "¿Gusta_leer?","¿Gusta_escuchar_musica?",
+  "¿Gusta_ver_peliculas_o_series?","¿Gusta_aprender_algo_nuevo?",
+  "¿Gusta_videojuegos?","¿Gusta_tocar_un_instrumento_musical?",
+  "¿Gusta_hacer_deporte?","¿Gusta_salir_a_bailar?",
+  "¿Gusta_cocinar?","¿Gusta_estudiar_estadistica?",
+  "Horas_de_estudio"
+)
+
+# Inputs para los botones de Shiny
+lista_de_variables <- as.list(1:ncol(encuesta))
+names(lista_de_variables) <- gsub('_',' ',colnames(encuesta))
+
+# Removemos las filas que contienen un NA en alguna columna
+encuesta_sin_NA <- encuesta[complete.cases(encuesta),]
+```
+
+<!--#region Univariate analysis -->
+# Análisis de cada variable
+
+## {data-width=200}
+
+### Variables de la encuesta
+
+```{r}
+radioButtons(
+  inputId = "var1", label = "Variable:",
+  choices = lista_de_variables, selected = 1
+)
+```
+
+### Estadísticos de las variables cuantitativas 
+
+```{r stats}
+renderTable({
+  # Revisamos que la variable sea cuantitativa
+  validate(need(input$var1 %in% c(1,3,16),"Error:\nLa variable seleccionada debe ser cuantitativa."))
+
+  stats <- c('Tamaño de la muestra', "Media", "Desviación estándar", "Mínimo", "Q1", "Mediana", "Q3", "Máximo")  
+  tabla_stats <- data.frame(stats,rep(NA,8))
+
+  # Llenamos la data
+  temporal <- as.integer(input$var1)
+  tabla_stats[1,2] <- length(encuesta[,temporal])
+  tabla_stats[2,2] <- mean(encuesta[,temporal],na.rm=T)
+  tabla_stats[3,2] <- sd(encuesta[,temporal],na.rm=T)
+  tabla_stats[4,2] <- min(encuesta[,temporal],na.rm=T)
+  tabla_stats[5,2] <- quantile(encuesta[,temporal],0.25,na.rm=T)
+  tabla_stats[6,2] <- median(encuesta[,temporal],na.rm=T)
+  tabla_stats[7,2] <- quantile(encuesta[,temporal],0.75,na.rm=T)
+  tabla_stats[8,2] <- max(encuesta[,temporal],na.rm=T)
+
+  # Mostrar data
+  tabla_stats
+})
+```
+
+## {data-height=800}
+
+### Gráfico asociado a la variable seleccionada 
+
+```{r}
+actionButton(
+  inputId = 'no_outliers_marginal',
+  label = 'Valores atípicos: No mostrar | Mostrar',
+  style = 'position: absolute; margin-bottom: 20px; border-radius: 50px; padding: 7px; z-index:10; right: 0;'
+)
+```
+
+```{r analisis-marginal-de-variables}
+renderPlotly({
+  var1 <- input$var1
+  var1 <- colnames(encuesta)[as.integer(var1)]
+  
+  # Valores asociados a las variables relevantes
+  indice1 <- which(colnames(encuesta)==var1)
+  
+  #### Casos respecto a si la variable es cuantitativa o cualitativa
+  # Si var1 es cuantitativa
+  if(indice1 %in% c(1,3,16)){
+    # Si existen valores atípicos en encuesta[,var1]
+    if(input$no_outliers_marginal%%2==1 &length(boxplot(encuesta[,var1],plot=FALSE)$out)>0){
+      fig <- plot_ly(
+        encuesta, y = encuesta[,var1], type = 'box',
+        marker = list(opacity = 0)
+      ) %>% 
+        layout(title = list(text = 'Valores atípicos ocultos', x = 0.5))
+      # Lower and upper whiskers
+      data <- encuesta[,var1]
+      lower_whisker <- max(min(data,na.rm = T),quantile(data,0.25,na.rm = T)-1.5*IQR(data,na.rm = T))
+      upper_whisker <- min(max(data,na.rm = T),quantile(data,0.75,na.rm = T)+1.5*IQR(data,na.rm = T))
+      
+      fig <- fig %>% layout(yaxis=list(range=c(lower_whisker,upper_whisker)))
+    } else{
+        fig <- plot_ly(encuesta, y = encuesta[,var1], type = 'box')
+    }
+    fig %>% layout(
+      xaxis = list(showticklabels = FALSE),
+      yaxis = list(title = gsub('_',' ',colnames(encuesta)[indice1]), zeroline = FALSE)
+    ) %>% config(displayModeBar=FALSE)
+  } else {
+    tabla <- prop.table(table(encuesta[,var1]))
+        
+    # Realizaremos un diagrama de barras respecto a "tabla"
+    temporal <- data.frame(tabla)
+    
+    fig <- plot_ly(
+      temporal,x=temporal[,1],y=temporal[,2], type='bar',
+      text = paste(temporal[,1],": ",round(temporal[,2],3),sep=''),
+      hoverinfo = 'text'
+    )
+    
+    fig <- fig %>% layout(
+      font=list(family = 'sans serif',size=14),
+      xaxis=list(title=gsub('_',' ',colnames(encuesta)[indice1])),
+      yaxis=list(title='Proporción',range=c(0,1))
+    )
+    
+    fig %>% config(displayModeBar= FALSE)
+  }  
+})
+```
+<!--#endregion-->
+
+<!--#region Multivariate analysis -->
+# Relación entre cada par de variables
+
+## {data-width=222}
+
+### Variables de la encuesta
+
+```{r}
+radioButtons(
+  inputId="var2",label="Variable:",
+  choices=lista_de_variables,selected=1
+)
+```
+
+### Variables de la encuesta
+
+```{r}
+radioButtons(
+  inputId="var3",label="Variable",
+  choices=lista_de_variables,selected=4
+)
+```
+
+### Medida de asociación vía p-valor
+
+```{r}
+renderPlotly({
+  # Revisamos que las variables seleccionadas sean distintas
+  validate(need(input$var2 != input$var3,"Error:\nLas variables deben ser diferentes."))
+
+  p_valor <- NA
+  var2 <- input$var2; var3 <- input$var3
+  var2 <- colnames(encuesta)[as.integer(var2)]
+  var3 <- colnames(encuesta)[as.integer(var3)]
+  indice2 <- which(colnames(encuesta)==var2)
+  indice3 <- which(colnames(encuesta)==var3)
+
+  # Non parametric testing
+  ## Cuanti vs Cuanti vía regresión lineal
+  ### Spearman's Rank-Order Correlation
+  if(indice2 %in% c(1,3,16) & indice3 %in% c(1,3,16)) {
+    # Parametric test: p_valor <- summary(lm(encuesta_sin_NA[,var2] ~ encuesta_sin_NA[,var3]))$coefficients[,4][2]
+    p_valor <- cor.test(x=encuesta_sin_NA[,var2], y=encuesta_sin_NA[,var3],method = 'spearman')$p.value
+  }
+
+  ## Cuanti vs Cuali
+  # Cuali de solo 2 valores
+  ### Mann-Whitney/Wilcoxon rank-sum test 
+  if( indice2 %in% c(1,3,16) & !(indice3 %in% c(1,3,4,5,16)) ) {
+    # t.test: p_valor <- t.test(encuesta_sin_NA[,var2] ~ encuesta_sin_NA[,var2],paired = FALSE)$p.value
+    p_valor <- wilcox.test(encuesta_sin_NA[,var2] ~ encuesta_sin_NA[,var3], data=encuesta_sin_NA, paired=FALSE, exact=FALSE)$p.value
+  }
+  if( indice3 %in% c(1,3,16) & !(indice2 %in% c(1,3,4,5,16)) ) {
+    # Point-biserial correlation: p_valor <- cor.test(unclass(factor(encuesta[,var2])),encuesta[,var3])$p.value
+    p_valor <- wilcox.test(encuesta_sin_NA[,var3] ~ encuesta_sin_NA[,var2], data=encuesta_sin_NA, paired=FALSE, exact=FALSE)$p.value
+  }
+  # Cuali de más de 2 valores
+  ### Kruskal-Wallis test
+  if( indice2 %in% c(1,3,16) & indice3 %in% 4:5) {
+    # One-way ANOVA: p_valor <- summary(aov(encuesta_sin_NA[,var2] ~ encuesta_sin_NA[,var3]))[[1]][["Pr(>F)"]][[1]]
+    p_valor <- kruskal.test(encuesta_sin_NA[,var2] ~ encuesta_sin_NA[,var3], data = encuesta_sin_NA)$p.value
+  }
+  if( indice3 %in% c(1,3,16) & indice2 %in% 4:5) {
+    # One-way ANOVA: p_valor <- summary(aov(encuesta_sin_NA[,var3] ~ encuesta_sin_NA[,var2]))[[1]][["Pr(>F)"]][[1]]
+    p_valor <- kruskal.test(encuesta_sin_NA[,var3] ~ encuesta_sin_NA[,var2], data = encuesta_sin_NA)$p.value
+  }
+
+  ## Cuali vs Cuali
+  if( !(indice2 %in% c(1,3,16)) & !(indice3 %in% c(1,3,16)) ) {
+    if(sum(dim(table(encuesta_sin_NA[,var2],encuesta_sin_NA[,var3])) == c(2,2)) == 2 ){
+      # If the contingency table is of the form 2x2, we perform 
+      # Fisher's exact test, 
+      # because it's better suited than Chi-Square test due to our small sample size (<30) .
+
+      p_valor <- fisher.test(table(encuesta_sin_NA[,var2],encuesta_sin_NA[,var3]))$p.value
+
+    } else {
+      # Check if the Chi-Square test produces a warning
+      if(inherits(tryCatch(chisq.test(table(encuesta_sin_NA[,var2],encuesta_sin_NA[,var3])),warning= function(w) w),"warning")){
+        # There was a warning, so we use another test
+        # Fisher-Freeman-Halton test
+        p_valor <- fisher.test(table(encuesta_sin_NA[,var2],encuesta_sin_NA[,var3]))$p.value
+      } else {
+        # Chi-Square test
+        p_valor <- chisq.test(table(encuesta_sin_NA[,var2],encuesta_sin_NA[,variable_3]))$p.value
+      }
+    }
+  }
+
+  # Gráfico
+  plot_ly(
+    domain = list(x = c(0,1), y = c(0, 0.85)), value = p_valor,
+    gauge = list(
+      axis=list(range = c(NULL,1)), 
+      threshold = list(line = list(color = "red", width = 3),
+      thickness = 1, value = 0.05),
+      steps = list(list(range = c(0,1), color = 'skyblue'))
+    ), 
+    type = "indicator", mode = "gauge+number"
+  ) %>% layout(margin = list(l=30,r=30)) %>% config(displayModeBar = FALSE)
+})
+```
+
+## {data-width=778}
+
+```{r}
+div(
+  id='botones',style='display: inline;',
+  actionButton(
+    inputId='swap_variables',
+    label='Intercambiar las variables seleccionadas',
+    style='position: relative;',onclick='flipear()'
+  ),
+  actionButton(
+    inputId='no_outliers_condicional',
+    label='Valores atípicos: No mostrar | Mostrar',
+    style='position: relative;'
+  )
+)
+```
+
+### Grafico asociado a las variables seleccionadas
+
+```{r analisis-condicional-de-variables}
+renderPlotly({
+    # Nos aseguramos que las variables por analizar sean distintas
+    validate(need(input$var2 != input$var3,"Error: Las variables deben ser diferentes."))
+    
+    # Gráfico apropiado para los tipos de variables seleccionadas
+    var2 <- input$var2; var3 <- input$var3
+    var2 <- colnames(encuesta)[as.integer(var2)]
+    var3 <- colnames(encuesta)[as.integer(var3)]
+  
+    # Valores asociados a las variables relevantes
+    indice2 <- which(colnames(encuesta)==var2)
+    indice3 <- which(colnames(encuesta)==var3)
+    
+    # Casos respecto a si las variables son cuantitativas o cualitativas
+    if(indice2 %in% c(1,3,16)){  # si var2 es cuanti 
+      if(indice3 %in% c(1,3,16)){
+        # Diagrama de dispersión
+        # Pese a que solo existe un NA en el dataset "encuesta",
+        # para poder generalizar este código, filtraremos los NA
+        temporal <- encuesta[complete.cases(encuesta),]
+        fig <- plot_ly(data=temporal,x=temporal[,var2],y=temporal[,var3])
+        fig <- fig %>% layout(
+                              title=paste("Coeficiente de correlación de Pearson:",as.character(round(cor(temporal[,var2],temporal[,var3]),3)),sep=" "),
+                              xaxis=list(title=gsub('_',' ',colnames(temporal)[indice2])),
+                              yaxis=list(title=gsub('_',' ',colnames(temporal)[indice3]))
+                              )
+        fig <- fig %>% add_trace(
+                          text = paste(
+                            gsub('_',' ',colnames(temporal)[indice2]),
+                            ": ",as.character(round(temporal[,var2],3)),
+                            "<br>",gsub('_',' ',colnames(temporal)[indice3]),": ",
+                            as.character(round(temporal[,var3])),sep=""
+                          ),
+                          hoverinfo = 'text'
+                        )
+        fig <- fig %>% config(displayModeBar= FALSE)
+        fig
+      } else {
+          if((input$no_outliers_condicional)%%2==1 & length(boxplot(encuesta[,var2] ~ encuesta[,var3],plot=FALSE)$out)>0){
+            fig  <- plot_ly(encuesta,y = encuesta[,var2],color = encuesta[,var3],
+                            type = "box",marker=list(opacity=0))
+            # Ajustamos el eje y del boxplot en base a las cotas adecuadas
+            cotas_inf <- c()
+            cotas_sup <- c()
+            
+            valores_unicos <- unique(encuesta[,colnames(encuesta)[indice3]])
+            for(i in 1:length(valores_unicos)){
+              data <- encuesta[encuesta[,colnames(encuesta)[indice3]]==valores_unicos[i],][,colnames(encuesta)[indice2]]
+              cotas_inf[i] <- max(min(data,na.rm = T),quantile(data,0.25,na.rm = T)-1.5*IQR(data,na.rm = T))
+              cotas_sup[i] <- min(max(data,na.rm = T),quantile(data,0.75,na.rm = T)+1.5*IQR(data,na.rm = T))
+            }
+            
+            # Por cuántas unidades sobrepasamos a las cotas adecuadas
+            shift <- 0.5
+            cota_inf <- min(cotas_inf) - shift
+            cota_sup <- max(cotas_sup) + shift
+            
+            fig <- fig %>% layout(title='Valores atípicos ocultos',
+                                  yaxis=list(range=c(cota_inf,cota_sup),zeroline=FALSE))
+          } else {
+            fig  <- plot_ly(encuesta,y = encuesta[,var2],color = encuesta[,var3],
+                            type = "box")
+          }
+          fig <- fig %>% layout(
+            xaxis = list(title = gsub('_',' ',colnames(encuesta)[indice3]), zeroline = FALSE),
+            yaxis = list(title = gsub('_',' ',colnames(encuesta)[indice2]), zeroline = FALSE)
+          ) %>% config(displayModeBar= FALSE)
+          fig
+        }
+      } else {
+        # var2 es una variable cualitativa
+        if(indice3 %in% c(1,3,16)){
+          if((input$no_outliers_condicional)%%2==1 & length(boxplot(encuesta[,var3] ~ encuesta[,var2],plot=FALSE)$out)>0){
+            fig  <- plot_ly(
+              encuesta,y = encuesta[,var3],color = encuesta[,var2],
+              type = "box",marker=list(opacity=0)
+            )
+            # Ajustamos el eje y del boxplot en base a las cotas adecuadas
+            cotas_inf <- c()
+            cotas_sup <- c()
+            
+            valores_unicos <- unique(encuesta[,colnames(encuesta)[indice2]])
+            for(i in 1:length(valores_unicos)){
+              data <- encuesta[encuesta[,colnames(encuesta)[indice2]]==valores_unicos[i],][,colnames(encuesta)[indice3]]
+              cotas_inf[i] <- max(min(data,na.rm = T),quantile(data,0.25,na.rm = T)-1.5*IQR(data,na.rm = T))
+              cotas_sup[i] <- min(max(data,na.rm = T),quantile(data,0.75,na.rm = T)+1.5*IQR(data,na.rm = T))
+            }
+            # Por cuántas unidades sobrepasamos a las cotas adecuadas
+            shift <- 0.5
+            cota_inf <- min(cotas_inf) - shift
+            cota_sup <- max(cotas_sup) + shift
+            
+            fig <- fig %>% layout(title='Valores atípicos ocultos',
+                                  yaxis=list(range=c(cota_inf,cota_sup),zeroline=FALSE))
+          } else {
+            fig  <- plot_ly(encuesta,y = encuesta[,var3],color = encuesta[,var2],
+                            type = "box")
+          }
+          fig <- fig %>% layout(
+            xaxis = list(title = gsub('_',' ',colnames(encuesta)[indice2]), zeroline = FALSE),
+            yaxis = list(title = gsub('_',' ',colnames(encuesta)[indice3]), zeroline = FALSE)
+          ) %>% config(displayModeBar= FALSE)
+          fig
+        } else {
+          # var2 y var3 son variables cualitativas
+          tabla <- prop.table(table(encuesta[,var2],encuesta[,var3]),2)
+        
+          # Realizaremos un diagrama de barras respecto a "tabla"
+          temporal <- data.frame(colnames(tabla))
+          for(i in 2:(1+nrow(tabla))){temporal[,i]<-tabla[(i-1),]}
+        
+          fig <- plot_ly(
+            temporal,x=temporal[,1],y=temporal[,2],
+            type='bar',name=rownames(tabla)[1],
+            text = paste(rownames(tabla)[1],": ",round(temporal[,2],3),sep=''),
+            hoverinfo = 'text'
+          )
+        
+          fig <- fig %>% layout(
+            title=paste0(
+              gsub('_',' ',colnames(encuesta)[indice3]),
+              ' vs ', gsub('_',' ',colnames(encuesta)[indice2])
+            ),
+            font=list(family = 'sans serif',size=14),
+            xaxis=list(title=gsub('_',' ',colnames(encuesta)[indice3])),
+            yaxis=list(title='Proporción'), barmode='stack'
+          )
+        
+          for(i in 3:ncol(temporal)){
+            fig <- fig %>% add_trace(
+              y = temporal[,i],type='bar',
+              name = rownames(tabla)[i-1],
+              text = paste0(
+                rownames(tabla)[i-1],": ",
+                round(temporal[,i],3)
+              ),
+              hoverinfo = 'text'
+            )
+          }
+          fig <- fig %>% config(displayModeBar= FALSE)
+          fig
+          }
+        }
+})
+```
+<!--#endregion-->
+
+<!--#region Function to calculate p values -->
+```{r funcion-para-p-valores} 
+# Removemos las filas que contienen un NA en alguna columna
+encuesta_sin_NA <- encuesta[complete.cases(encuesta),]
+
+obtener_p_valor <- function(variable_2,variable_3){
+  p_value <- NA
+  variable_2 <- as.integer(variable_2)
+  variable_3 <- as.integer(variable_3)
+
+  # Non parametric testing
+
+  ## Cuanti vs Cuanti vía regresión lineal
+  ### Spearman's Rank-Order Correlation
+  if(variable_2 %in% c(1,3,16) & variable_3 %in% c(1,3,16)) {
+    p_value <- cor.test(x=encuesta_sin_NA[,variable_2], y=encuesta_sin_NA[,variable_3],method = 'spearman', exact=FALSE)$p.value
+  }
+
+  ## Cuanti vs Cuali
+  ### Cuali de solo 2 valores
+  #### Mann-Whitney/Wilcoxon rank-sum test 
+  if( variable_2 %in% c(1,3,16) & !(variable_3 %in% c(1,3,4,5,16)) ) {
+    p_value <- wilcox.test(encuesta_sin_NA[,variable_2] ~ encuesta_sin_NA[,variable_3], data=encuesta_sin_NA, paired=FALSE, exact=FALSE)$p.value
+  }
+  if( variable_3 %in% c(1,3,16) & !(variable_2 %in% c(1,3,4,5,16)) ) {
+    p_value <- wilcox.test(encuesta_sin_NA[,variable_3] ~ encuesta_sin_NA[,variable_2], data=encuesta_sin_NA, paired=FALSE, exact=FALSE)$p.value
+  }
+  ### Cuali de más de 2 valores
+  #### Kruskal-Wallis test
+  if( variable_2 %in% c(1,3,16) & variable_3 %in% 4:5) {
+    p_value <- kruskal.test(encuesta_sin_NA[,variable_2] ~ encuesta_sin_NA[,variable_3], data = encuesta_sin_NA)$p.value
+  }
+  if( variable_3 %in% c(1,3,16) & variable_2 %in% 4:5) {
+    p_value <- kruskal.test(encuesta_sin_NA[,variable_3] ~ encuesta_sin_NA[,variable_2], data = encuesta_sin_NA)$p.value
+  }
+
+  ## Cuali vs Cuali
+  if( !(variable_2 %in% c(1,3,16)) & !(variable_3 %in% c(1,3,16)) ) {
+    if(sum(dim(table(encuesta_sin_NA[,variable_2],encuesta_sin_NA[,variable_3])) == c(2,2)) == 2 ){
+      # If the contingency table is of the form 2x2, we perform 
+      # Fisher's exact test, 
+      # because it's better suited than Chi-Square test due to our small sample size (<30) .
+
+      p_value <- fisher.test(table(encuesta_sin_NA[,variable_2],encuesta_sin_NA[,variable_3]))$p.value
+
+    } else {
+      # Check if the Chi-Square test produces a warning
+      if(inherits(tryCatch(chisq.test(table(encuesta_sin_NA[,variable_2],encuesta_sin_NA[,variable_3])),warning= function(w) w),"warning")){
+        # There was a warning, so we use another test
+        # Fisher-Freeman-Halton test
+        p_value <- fisher.test(table(encuesta_sin_NA[,variable_2],encuesta_sin_NA[,variable_3]))$p.value
+      } else {
+        # Chi-Square test
+        p_value <- chisq.test(table(encuesta_sin_NA[,variable_2],encuesta_sin_NA[,variable_3]))$p.value
+      }
+    }
+  }
+
+  return(p_value)
+}
+```
+<!--#endregion-->
+
+# Modelamiento
+
+## {data-width=500 .tabset}
+
+### Objetivo
+
+Nos interesa hallar qué variables de la data están
+más asociadas a la variable **horas-de-estudio**.
+
+<!--#region Modelo de variable 'horas de estudio' -->
+```{r modelo-horas-de-estudio}
+# Horas de estudio: Columna 6 del data frame 'encuesta'
+
+excepcion_indice <- 16
+indices_por_revisar <- (1:ncol(encuesta))[-excepcion_indice]
+p_valores_horas_de_estudio <- data.frame(
+  indice_variable = rep(NA,ncol(encuesta)-1),
+  p_valor = rep(NA,ncol(encuesta)-1)
+)
+
+for(i in 1:length(indices_por_revisar)){
+  p_valores_horas_de_estudio$indice_variable[i] <- indices_por_revisar[i]
+  p_valores_horas_de_estudio$p_valor[i] <- obtener_p_valor(excepcion_indice,indices_por_revisar[i])
+}
+
+# Hallemos las variables que tienen un p-valor menor a 0.05 cuando 
+# se les analiza junto a la variable "horas de estudio"
+
+## Índices de las variables independientes
+# (p_valores_horas_de_estudio[p_valores_horas_de_estudio$p_valor < 0.05,])$indice_variable
+
+gusta_stats_convertido <- unclass(factor(encuesta_sin_NA$`¿Gusta_estudiar_estadistica?`))
+```
+
+### Modelo 1
+
+<h4>Stepwise regression</h4>
+
+```{r, message=FALSE, echo=TRUE}
+variable_dependiente <- lm(Horas_de_estudio ~ 1, data = encuesta_sin_NA)
+todas_las_variables <- lm(Horas_de_estudio ~ .,data = encuesta_sin_NA)
+
+formula(todas_las_variables)
+```
+
+<h4>Modelo</h4>
+
+```{r,message=FALSE, echo=TRUE}
+modelo_regresion_1 <- step(variable_dependiente, direction = 'both', scope = formula(todas_las_variables))
+summary(modelo_regresion_1)
+```
+
+### Modelo 2
+
+```{r,message=FALSE, echo=TRUE}
+# The independent variables will be chosen based on p-value comparisons
+modelo_inicial <- lm(Horas_de_estudio ~ ., data = encuesta_sin_NA)
+
+library(olsrr)
+```
+
+<h4>Forward stepwise regression</h4>
+
+```{r}
+modelo_2_forward <- ols_step_forward_p(modelo_inicial, prem = 0.1) # p-value to remain in model
+modelo_2_forward
+modelo_2_forward$model
+```
+
+<h4>Backward stepwise regression</h4>
+
+```{r}
+modelo_2_backward <- ols_step_backward_p(modelo_inicial, prem = 0.1) # p-value to remain in model
+modelo_2_backward
+modelo_2_backward$model
+```
+
+<h4>Stepwise regression</h4>
+
+```{r}
+modelo_2_stepwise <- ols_step_both_p(modelo_inicial, penter = 0.05, prem = 0.1)
+modelo_2_stepwise
+modelo_2_stepwise$model
+```
+
+### Modelo 3
+
+<h4>Verificación</h4>
+
+```{r,message=FALSE, echo=TRUE}
+data_regresion <- data.frame(
+  encuesta_sin_NA$Horas_de_estudio,
+  unclass(factor(encuesta_sin_NA[,15]))-1,
+  unclass(factor(encuesta_sin_NA[,11]))-1
+)
+# No: 0    Sí: 1
+colnames(data_regresion) <- c("horas_de_estudio","gusta_estudiar_stats","gusta_tocar_instrumento")
+head(data_regresion)
+```
+
+<h4>Modelo</h4>
+
+```{r,message=FALSE, echo=TRUE}
+modelo_regresion <- lm(horas_de_estudio ~ gusta_tocar_instrumento + gusta_estudiar_stats, data_regresion)
+summary(modelo_regresion)
+```
+
+### Predicciones
+
+```{r, tabla-resumen, echo = TRUE}
+prediccion_horas_de_estudio <- function(gusta_instru,gusta_stats) {
+  return(10.855 - 8.200*gusta_instru + 17.317*gusta_stats)
+}
+
+prediccion <- data.frame(
+  gusta_tocar_instrumento = c("Sí","Sí","No","No"),
+  gusta_estudiar_stats = c("Sí","No","Sí","No"),
+  horas_de_estudio_predicha = rep(NA,4)
+)
+
+prediccion$horas_de_estudio_predicha <- c(
+  prediccion_horas_de_estudio(1,1),
+  prediccion_horas_de_estudio(1,0),
+  prediccion_horas_de_estudio(0,1),
+  prediccion_horas_de_estudio(0,0)
+)
+
+colnames(prediccion) <- c(
+  "¿Le gusta tocar un instrumento musical?",
+  "¿Le gusta estudiar Estadística?",
+  "Horas de estudio predicha"
+)
+```
+
+```{r, results="asis"}
+knitr::kable(prediccion, col.names = names(prediccion))
+```
+
+<!--#region pending to add -->
+<!-- # # Convertimos las dummy variables vía:  No: 0    Sí: 1
+# datos_logistico_1 <- data.frame(gustar_stats = unclass(as.factor(encuesta_sin_NA[,15])) - 1)
+# datos_logistico_1$leer <- unclass(as.factor(encuesta_sin_NA[,6]))-1
+# datos_logistico_1$aprender <- unclass(as.factor(encuesta_sin_NA[,9]))-1
+# datos_logistico_1$bailar <- unclass(as.factor(encuesta_sin_NA[,13]))-1
+# datos_logistico_1$horas_estudio <- encuesta_sin_NA[,16]
+
+# modelo_logistico_1 <- glm(gustar_stats ~ leer + aprender + bailar + horas_estudio,
+#                         family = "binomial", data = datos_logistico_1)
+
+# summary(modelo_logistico_1)
+
+
+# # Convertimos las dummy variables vía:  No: 0    Sí: 1
+# datos_logistico_2 <- data.frame(gustar_stats = unclass(as.factor(encuesta_sin_NA[,15])) - 1)
+# datos_logistico_2$leer <- unclass(as.factor(encuesta_sin_NA[,6]))-1
+# datos_logistico_2$aprender <- unclass(as.factor(encuesta_sin_NA[,9]))-1
+# datos_logistico_2$sexo <- unclass(as.factor(encuesta_sin_NA[,2]))-1
+# datos_logistico_2$horas_estudio <- encuesta_sin_NA[,16]
+
+# modelo_logistico_2 <- glm(gustar_stats ~ leer + aprender + sexo + horas_estudio,
+#                         family = "binomial", data = datos_logistico_2)
+
+# summary(modelo_logistico_2)
+
+
+# datos_logistico_3 <- data.frame(gustar_stats = unclass(as.factor(encuesta_sin_NA[,15])) - 1)
+# datos_logistico_3$leer <- unclass(as.factor(encuesta_sin_NA[,6]))-1
+# datos_logistico_3$aprender <- unclass(as.factor(encuesta_sin_NA[,9]))-1
+# datos_logistico_3$horas_estudio <- encuesta_sin_NA[,16]
+
+# modelo_logistico_3 <- glm(gustar_stats ~ leer + aprender + horas_estudio,
+#                         family = "binomial", data = datos_logistico_3)
+
+# summary(modelo_logistico_3)
+
+
+# modelo_logistico_1
+# modelo_logistico_2
+# modelo_logistico_3 -->
+<!--#endregion-->
+
+## {data-width=500}
+
+### Análisis respecto a si les gusta estudiar Estadística
+
+<!--#region Modelo de variable '¿Gusta_estudiar_estadistica?' -->
+```{r modelo-gustar-stats}
+# Gusta estudiar estadísitica: Columna 15 del data frame 'encuesta'
+
+excepcion_indice <- 15
+indices_por_revisar <- (1:ncol(encuesta))[-excepcion_indice]
+p_valores_horas_de_estudio <- data.frame(
+  indice_variable = rep(NA,ncol(encuesta)-1),
+  p_valor = rep(NA,ncol(encuesta)-1)
+)
+
+for(i in 1:length(indices_por_revisar)){
+  p_valores_horas_de_estudio$indice_variable[i] <- indices_por_revisar[i]
+  p_valores_horas_de_estudio$p_valor[i] <- obtener_p_valor(excepcion_indice,indices_por_revisar[i])
+}
+
+# Para el modelo que intenta predecir si les gusta estadística, emplearemos 
+# como variables independientes solamente a aquellas que tiene un p-valor
+# menor a 0.25 cuando se les analiza junto a la variable "¿Gusta_estudiar_estadistica?"
+
+# Índices de las variables independientes
+# (p_valores_horas_de_estudio[p_valores_horas_de_estudio$p_valor < 0.25,])$indice_variable
+
+# Variable 6: ¿Gusta_leer? (variable cualitativa)
+# Variable 9: ¿Gusta_aprender_algo_nuevo? (variable cualitativa)
+# Variable 13: ¿Gusta_salir_a_bailar? (variable cualitativa)
+# Variable 16: Horas_de_estudio (variable cuantitativa)
+
+combinar_data_frames <- function(df_1,df_2){
+  temporale <- df_1
+  diferencia <- abs(nrow(df_1) - nrow(df_2))
+  if (nrow(df_1) == nrow(df_2)) {
+    return(data.frame(df_1,df_2))
+  } else {
+    if(nrow(df_1) < nrow(df_2)) {
+      df_1 <- df_2
+      df_2 <- temporale
+    }
+    # Ahora se cumple que df_1 tiene más filas que df_2
+    columnas_2 <- ncol(df_2)
+    df_temporal <- data.frame(rep(NA,diferencia))
+    
+    # Añadir columnas (tantas como en df_2) de NA's
+    if(columnas_2 == 1){
+      colnames(df_temporal) <- colnames(df_2)
+      # Añadimos suficientes filas de NA a df_2
+      return( data.frame(df_1, rbind(df_2,df_temporal) ) ) 
+    } else {
+      for(i in 2:columnas_2){
+        df_temporal[,i] <- rep(NA,diferencia)
+      }
+      colnames(df_temporal) <- colnames(df_2)
+      # Añadimos suficientes filas de NA a df_2
+      return( data.frame(df_1, rbind(df_2,df_temporal) ) ) 
+    }
+  }
+}
+
+# Convertimos las dummy variables vía:  No: 0    Sí: 1
+datos_logistico <- data.frame(gustar_stats = unclass(as.factor(encuesta_sin_NA[,15])) - 1)
+datos_logistico$leer <- unclass(as.factor(encuesta_sin_NA[,6]))-1
+datos_logistico$aprender <- unclass(as.factor(encuesta_sin_NA[,9]))-1
+datos_logistico$bailar <- unclass(as.factor(encuesta_sin_NA[,13]))-1
+datos_logistico$horas_estudio <- encuesta_sin_NA[,16]
+
+modelo_logistico <- glm(gustar_stats ~ leer + aprender + bailar + horas_estudio,
+                        family = "binomial", data = datos_logistico)
+
+# summary(modelo_logistico)
+
+## Recta asociada a este modelo logístico
+probabilidad <- function(leer,aprender,bailar,horas_estudio) {
+  temp <- -21.58424 + 1.60405*leer + 17.02189*aprender + 1.25694*bailar + 0.16073*horas_estudio
+  return(exp(temp)/(1+exp(temp)))
+} 
+```
+
+<!--#region Interactive multiple logistic regression model -->
+<strong>
+  Marque las casillas asociadas a las variables que desea considerar como un Sí en el modelo a continuación. 
+  <br/>
+  Casilla no marcada se interpretará como un valor No para su variable asociada.
+</strong>
+
+<p style="margin-bottom: -15px;"> &nbsp; </p>
+
+```{r}
+checkboxGroupInput(inputId='gustos',
+    label = "variables cualitativas de regression", 
+    choices = list("¿Le gusta leer?" = 1, "¿Le gusta aprender algo nuevo?" = 2, "¿Le gusta salir a bailar?" = 3), selected=c(2),inline=TRUE)
+```
+
+```{r multiple-logistic-regression-graph}
+renderPlotly({
+  ## Asignamos los valores de las dummy variables
+  if(1 %in% as.integer(input$gustos)){
+    leer <- 1
+  } else {
+    leer <- 0
+  }
+  if(2 %in% as.integer(input$gustos)){
+    aprender <- 1
+  } else {
+    aprender <- 0
+  }
+  if(3 %in% as.integer(input$gustos)){
+    bailar <- 1
+  } else {
+    bailar <- 0
+  }
+
+  df_desordenado <- data.frame(
+    probabilidad_gustar_stats = probabilidad(leer,aprender,bailar,datos_logistico$horas_estudio),
+    horas_estudio =  encuesta_sin_NA$Horas_de_estudio,
+    gustar_stats = as.vector(gusta_stats_convertido)-1
+  )
+
+  df_ordenado <- with(df_desordenado,df_desordenado[order(gustar_stats,probabilidad_gustar_stats,horas_estudio),])
+
+  # Separamos la data en un mismo data frame respecto a si le gusta o no Estadística
+  data_predicha <- combinar_data_frames(
+    df_ordenado[1:(sum(0 == df_ordenado$gustar_stats)),],
+    df_ordenado[-(1:(sum(0 == df_ordenado$gustar_stats))),]
+  )
+
+  colnames(data_predicha)[1:3] <- c("proba_gustar_stats_0","horas_estudio_0","gustar_stats_0")
+  colnames(data_predicha)[4:6] <- c("proba_gustar_stats_1","horas_estudio_1","gustar_stats_1")
+
+  # Función de probabilidad predicha via regresión logística
+  dominio <- seq(0,60,0.5)
+
+  data_predicha <- combinar_data_frames(
+    data_predicha,
+    data.frame(
+      dominio, 
+      proba_predicha = probabilidad(leer,aprender,bailar,dominio)
+    )
+  )
+
+  ## Graficamos
+  # No le gusta Estadística
+  fig <- plot_ly(
+    data = data_predicha, x=~horas_estudio_0,y=~proba_gustar_stats_0,
+    name = '\n\nEncuestados que no\nles gusta Estadística\n\n\n'
+  )
+
+  fig <- fig %>% layout(
+    title = "¿Le gusta estudiar Estadística?",
+    xaxis = list(
+      title = 'Horas de estudio',
+      range = c(0,5+max(encuesta_sin_NA$Horas_de_estudio))
+    ),
+    yaxis = list(
+      title="Probabilidad predicha de que le gusta Estadística",
+      range=c(0,1)
+    )
+  ) 
+
+  fig <- fig %>% add_trace(
+    text = ~paste("Horas de estudio: ",round(horas_estudio_0,2),"\nProbabilidad: ",round(proba_gustar_stats_0,2),sep=''),
+    hoverinfo = 'text', marker=list(size=7)
+  )
+
+
+  # Le gusta Estadística
+  fig <- fig %>% add_trace(
+    x = ~horas_estudio_1, y = ~proba_gustar_stats_1,
+    name = '\n\nEncuestados que sí\nles gusta Estadística\n\n\n',
+    text = ~paste0(
+      "Horas de estudio: ", 
+      round(horas_estudio_1,2),
+      "\nProbabilidad: ",
+      round(proba_gustar_stats_1,2)
+    ),
+    hoverinfo = 'text', marker = list(size=7)
+  )
+
+  # Probabilidad
+  fig <- fig %>% add_trace(
+    x = ~dominio, y = ~proba_predicha, mode = "lines",
+    name = 'Probabilidad predicha,\nconsiderando que la\nprobabilidad se acerca a\nuno cuando a la\npersona encuestada le\ngusta Estadística.',
+    line = list(color = 'black', width = 0.5)
+  )
+
+  # Remove menu bar in the plotly graph
+  fig <- fig %>% config(displayModeBar= FALSE)
+
+  fig
+})
+```
+<!--#endregion-->
+
+# Ubicación de los encuestados
+
+## {data-width = 1000}
+
+### ¿Dónde se encuentran los estudiantes que respondieron la encuesta?
+
+<!--#region Mapa -->
+```{r}
+## Limpieza manual porque janitor me falló
+
+# Información sobre dónde viven los estudiantes
+locaciones <- c("la perla,callao","pueblo libre,lima","puno,puno","ventanilla,callao","huancayo, junin","pueblo libre,lima","los olivos, lima","los olivos, lima","los olivos, lima","ventanilla,callao","trujillo,trujillo","san juan de lurigancho,lima","comas,lima","huancayo,junin","miraflores,lima","breña,lima","lima,lima","la victoria,lima","miraflores,lima","san borja,lima","santiago de surco,lima","puno,puno","miraflores,lima","huanuco,huanuco","lima,lima","huancayo,junin","barranco,lima","chorrillos,lima","carabayllo,lima","iquitos,loreto","san jeronimo,cusco","lima,lima","san miguel, lima","independencia,lima","san juan de lurigancho,lima","ica,ica","san isidro,lima","san miguel,lima","breña,lima","lima,lima","el agustino,lima","san miguel,lima","miraflores,lima","wanchaq,cusco","la perla,callao","lima,lima","san borja,lima","comas,lima")
+distritos <- unique(c("la perla","pueblo libre","puno","ventanilla","huancayo","pueblo libre","los olivos","los olivos","los olivos","ventanilla","trujillo","san juan de lurigancho","comas","huancayo","miraflores","breña","lima","la victoria","miraflores","san borja","santiago de surco","puno","miraflores","huanuco","lima","huancayo","barranco","chorrillos","carabayllo","iquitos","san jeronimo","lima","san miguel","independencia","san juan de lurigancho","ica","san isidro","san miguel","breña","lima","el agustino","san miguel","miraflores","wanchaq","la perla","lima","san borja","comas"))
+
+# Lista de los distritos, donde después añadiremos su latitud y longitud
+coordenadas <- list()
+for(i in 1:length(distritos)){
+  coordenadas[[i]] <- c(NA,NA) #c(-12.0656,-77.1081) + rnorm(1)
+}
+names(coordenadas) <- distritos
+
+# Llenamos manualmente las coordenadas de los 27 distritos de la encuesta
+coordenadas[[1]] <- c(-12.0656,-77.1081); coordenadas[[2]] <- c(-9.11056,-77.8019)
+coordenadas[[3]] <- c(-15.839632,-70.021528); coordenadas[[4]] <- c(-11.855556,-77.073611)
+coordenadas[[5]] <- c(-12.0681,-75.2106); coordenadas[[6]] <- c(-11.9917,-77.0706)
+coordenadas[[7]] <- c(-8.11167,-79.0286); coordenadas[[8]] <- c(-12.0294,-77.0103)
+coordenadas[[9]] <- c(-11.9575,-77.0492); coordenadas[[10]] <- c(-12.1219,-77.0297)
+coordenadas[[11]] <- c(-12.0569,-77.0536); coordenadas[[12]] <- c(-12.04318,-77.02824)
+coordenadas[[13]] <- c(-12.0653,-77.0311); coordenadas[[14]] <- c(-12.1072,-76.9992)
+coordenadas[[15]] <- c(-12.1464,-77.0067); coordenadas[[16]] <- c(-9.92944,-76.2397)
+coordenadas[[17]] <- c(-12.1492,-77.0217); coordenadas[[18]] <- c(-12.1692,-77.0244)
+coordenadas[[19]] <- c(-11.7961600,-76.9768600); coordenadas[[20]] <- c(-3.75,-73.2444)
+coordenadas[[21]] <- c(-13.5447,-71.8839); coordenadas[[22]] <- c(-12.0908,-77.0839)
+coordenadas[[23]] <- c(-11.9969,-77.0544); coordenadas[[24]] <- c(-14.0639,-75.7292)
+coordenadas[[25]] <- c(-12.0989,-77.0347); coordenadas[[26]] <- c(-12.0483,-76.9833)
+coordenadas[[27]] <- c(-13.5253,-71.9658)
+
+# Asignamos la latitud y longitud de los distritos de la encuesta
+library(stringr)
+latitud  <- c()
+longitud <- c()
+for(i in 1:length(locaciones)){
+  distrito <- str_split(locaciones[i],',')[[1]][1]
+  latitud[i]  <- coordenadas[distrito][[1]][1]
+  longitud[i] <- coordenadas[distrito][[1]][2]
+}
+
+# Mostramos el mapa relevante
+library(leaflet)
+leaflet(data.frame(lat=latitud,long=longitud)) %>% addTiles() %>% 
+        addMarkers(clusterOptions = markerClusterOptions())
+```
+<!--#endregion-->
+
+<!--#region Code to interchange selected variables -->
+<script>
+  // Code relevante para el intercambio del par de variables escogidas
+  let variable2 = document.querySelectorAll('input[name="var2"]')
+  let variable3 = document.querySelectorAll('input[name="var3"]')
+  
+  function marcado(vec){
+    for(var i=0;i<vec.length;i++){
+      if(vec[i].checked == true){
+        return i;
+          }
+      }
+  }
+  
+  function flipear(){
+    var indice2 = marcado(variable2);
+      var indice3 = marcado(variable3);
+      variable2[indice3].click();
+      variable3[indice2].click();
+  }
+</script>
+<!--#endregion-->
+
+<!--#region extra code to add later -->
+```{r, eval=FALSE, include=FALSE}
+# Convertimos las dummy variables vía:  No: 0    Sí: 1
+datos_logistico_1 <- data.frame(gustar_stats = unclass(as.factor(encuesta_sin_NA[,15])) - 1)
+datos_logistico_1$leer <- unclass(as.factor(encuesta_sin_NA[,6]))-1
+datos_logistico_1$aprender <- unclass(as.factor(encuesta_sin_NA[,9]))-1
+datos_logistico_1$bailar <- unclass(as.factor(encuesta_sin_NA[,13]))-1
+datos_logistico_1$horas_estudio <- encuesta_sin_NA[,16]
+
+modelo_logistico_1 <- glm(gustar_stats ~ leer + aprender + bailar + horas_estudio,
+                        family = "binomial", data = datos_logistico_1)
+
+summary(modelo_logistico_1)
+
+
+
+# Convertimos las dummy variables vía:  No: 0    Sí: 1
+datos_logistico_2 <- data.frame(gustar_stats = unclass(as.factor(encuesta_sin_NA[,15])) - 1)
+datos_logistico_2$leer <- unclass(as.factor(encuesta_sin_NA[,6]))-1
+datos_logistico_2$aprender <- unclass(as.factor(encuesta_sin_NA[,9]))-1
+datos_logistico_2$sexo <- unclass(as.factor(encuesta_sin_NA[,2]))-1
+datos_logistico_2$horas_estudio <- encuesta_sin_NA[,16]
+
+modelo_logistico_2 <- glm(gustar_stats ~ leer + aprender + sexo + horas_estudio,
+                        family = "binomial", data = datos_logistico_2)
+
+summary(modelo_logistico_2)
+
+
+datos_logistico_3 <- data.frame(gustar_stats = unclass(as.factor(encuesta_sin_NA[,15])) - 1)
+datos_logistico_3$leer <- unclass(as.factor(encuesta_sin_NA[,6]))-1
+datos_logistico_3$aprender <- unclass(as.factor(encuesta_sin_NA[,9]))-1
+datos_logistico_3$horas_estudio <- encuesta_sin_NA[,16]
+
+modelo_logistico_3 <- glm(gustar_stats ~ leer + aprender + horas_estudio,
+                        family = "binomial", data = datos_logistico_3)
+
+summary(modelo_logistico_3)
+
+modelo_logistico_1
+modelo_logistico_2
+modelo_logistico_3
+```
+
+```{r, eval=FALSE, include=FALSE}
+encuesta_sin_NA$`¿Gusta_estudiar_estadistica?` <- as.factor(encuesta_sin_NA$`¿Gusta_estudiar_estadistica?`)
+
+variable_dependiente <- glm(`¿Gusta_estudiar_estadistica?` ~ 1, data = encuesta_sin_NA, family = "binomial")
+todas_las_variables <- glm(`¿Gusta_estudiar_estadistica?` ~ .,data = encuesta_sin_NA, family = "binomial")
+  
+  
+MASS::stepAIC(todas_las_variables, direction='forward')
+```
+<!--#endregion-->

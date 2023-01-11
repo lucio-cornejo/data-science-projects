@@ -1,0 +1,945 @@
+---
+title: My Spotify 2022 Data
+code-block-border-left: crimson
+execute:
+  echo: true
+  cache: true
+  warning: false
+format: 
+  html:
+    page-layout: full
+    toc: true
+    toc-depth: 4
+    code-fold: true
+    code-tools: true
+    theme: [united, slate, yeti, theme.scss]
+    highlight-style: dracula
+---
+
+# Datasets
+
+1. My library
+1. My playlists
+1. Streaming history
+
+```{r}
+# Packages loaded
+library(jsonlite)
+library(spotifyr)
+library(DT)
+library(stringr)
+library(dplyr)
+library(ggplot2)
+library(knitr)
+```
+
+## My library
+
+```{r}
+# Load data
+my_library <- 
+  jsonlite::read_json("./dataset_my-spotify-2022/YourLibrary.json")
+```
+
+```{r}
+summary(my_library)
+```
+
+```{r}
+# Remove empty categories
+my_library <- Filter(
+  \(category) length(category) > 0,
+  my_library
+)
+summary(my_library)
+```
+
+```{r}
+# Separate data frames
+lib_tracks <- as.data.frame(do.call(rbind, my_library$tracks))
+lib_albums <- as.data.frame(do.call(rbind, my_library$albums))
+lib_shows <- as.data.frame(do.call(rbind, my_library$shows))
+lib_episodes <- as.data.frame(do.call(rbind, my_library$episodes))
+lib_artists <- as.data.frame(do.call(rbind, my_library$artists))
+```
+
+```{r}
+DT::datatable(lib_tracks)
+```
+
+```{r}
+DT::datatable(lib_albums)
+```
+
+```{r}
+DT::datatable(lib_shows)
+```
+
+```{r}
+DT::datatable(lib_episodes)
+```
+
+```{r}
+DT::datatable(lib_artists)
+```
+
+&nbsp; \
+&nbsp; \
+
+### My library tracks
+
+Let's check if the **uri** *spotify:track:* pattern
+is consistent accros all tracks.
+
+```{r}
+sapply(
+  lib_tracks$uri,
+  \(uri) stringr::str_starts(uri, "spotify:track:")
+) |> all()
+```
+
+The pattern is consistent, therefore, let's work with
+the track id, to retrieve track info later on.
+
+```{r}
+lib_tracks <- mutate(
+  lib_tracks,
+  uri = stringr::str_sub(uri, start = 1 + nchar("spotify:track:"))
+)
+
+head(lib_tracks)
+```
+
+Using Spotify's API, wraped via the **spotifyr** package,
+let's retrieve the duration (in miliseconds) and popularity
+of the tracks.
+
+```{r}
+# Use personal credentials
+spotify_credentials <- read.csv(file = "./my-spotify-credentials.csv")
+Sys.setenv(SPOTIFY_CLIENT_ID = spotify_credentials$SPOTIFY_CLIENT_ID)
+Sys.setenv(SPOTIFY_CLIENT_SECRET = spotify_credentials$SPOTIFY_CLIENT_SECRET)
+access_token <- spotifyr::get_spotify_access_token()
+```
+
+There is a limit to how many track info requests we can make
+via **one** call using the `spotifyr::get_tracks` function.
+For that reason, I'll make requests in groups of 50 tracks,
+until completing all tracks.
+
+The following code chunk can be executed in the console,
+but it does not compile when rendering this Quarto file.
+I'll save the new dataset obtained and simply load it afterwards.
+
+```{r}
+#| eval: false
+## Retrieve data from Spotify
+retrieve <- function(extractor, col_names, ids) {
+  extracted_data <- as.data.frame(
+    matrix(nrow = 0, ncol = length(col_names))
+  )
+  colnames(extracted_data) <- col_names
+
+  group <- 50
+  q <- 0
+  while (group*(q+1) < length(ids)) {
+    extracted_data <- rbind(
+      extracted_data,
+      select(
+        extractor(ids[(1+group*q):(group*(q+1))]), 
+        all_of(col_names)
+      )
+    )
+    q <- q + 1
+  }
+  # length(ids) may not be a multiple of group (50),
+  # so, let's finish the process for all rows.
+  if (length(ids)%%group != 0) {
+    extracted_data <- rbind(
+      extracted_data,
+      select(
+        extractor(ids[(1+group*q):length(ids)]), 
+        all_of(col_names)
+      )
+    )
+  }
+  return (extracted_data)
+}
+
+# Add duration_ms and popularity tracks info to tracks dataset
+lib_tracks <- cbind(
+  lib_tracks, 
+  retrieve(
+    spotifyr::get_tracks, c("duration_ms", "popularity"), 
+    lib_tracks$uri
+  ) 
+)
+
+## Retrieve more audio features
+lib_tracks <- cbind(
+  lib_tracks, 
+  retrieve(
+    spotifyr::get_track_audio_features, 
+    c("danceability", "energy", "loudness", 
+      "speechiness", "acousticness", "instrumentalness",
+      "liveness", "valence", "tempo", "time_signature"
+    ),
+    lib_tracks$uri
+  ) 
+)
+
+data.table::fwrite(lib_tracks, file = "./data-frames/library_tracks.csv")
+```
+
+```{r}
+lib_tracks <- select(
+  read.csv(file = "./data-frames/library_tracks.csv"),
+  artist:time_signature
+)
+DT::datatable(lib_tracks)
+```
+
+#### Duration of the tracks
+
+```{r}
+#| fig-align: center
+ggplot(lib_tracks, aes(x = duration_ms / 1000)) +
+  geom_histogram(aes(y = after_stat(count / sum(count)))) +
+  scale_x_continuous(
+    breaks = seq(0, max(lib_tracks$duration_ms) / 1000, 250)
+  ) +
+  scale_y_continuous(labels = scales::percent, n.breaks = 20) + 
+  labs(
+    x = "Track duration (in seconds)",
+    y = NULL,
+    title = "Relative frequency of tracks' duration"
+  ) +
+  annotate("text", x = 1500, y = 0.175, 
+    label = paste(1:17 * 60, "s =", 1:17, "min", collapse = "\n")
+  )
+```
+
+#### Popularity of the tracks
+
+```{r}
+#| fig-align: center
+ggplot(lib_tracks, aes(x = popularity)) +
+  stat_ecdf() +
+  scale_x_continuous(
+    breaks = seq(0, max(lib_tracks$popularity), 5)
+  ) +
+  scale_y_continuous(
+    labels = scales::percent, n.breaks = 20, limits = c(0, 0.99)
+  ) + 
+  labs(
+    x = "Track's popularity",
+    y = NULL,
+    title = "Tracks' popularity (denoted from 0 to 100): Cummulative relative frequency"
+  ) 
+```
+
+#### Track duration vs Track popularity
+
+Despite track's duration and popularity being registered
+as numeric variables, a scatter plot does not reveal useful informacion.
+
+Also note that the tracks popularity *median*, 
+`r median(lib_tracks$popularity)`, is **extremely close**
+to its minimum possible value, $0$. 
+Therefore, I'll consider a categorical transformation of the
+popularity simply via the intervals 
+$[0, `r median(lib_tracks$popularity)`]$ and
+$(`r median(lib_tracks$popularity)`, 100]$ 
+
+```{r}
+#| fig-align: center
+med_popu <- median(lib_tracks$popularity)
+
+lib_tracks |> 
+  mutate(popularity_category = case_when(
+    popularity < med_popu ~ paste0("[0, ", med_popu, ")"),
+    TRUE ~ paste0("[", med_popu, ", 100]"),
+  )) |>
+  ggplot(aes(
+    x = popularity_category, y = duration_ms / 1000,
+    fill = popularity_category
+  )) +
+  geom_violin(trim = FALSE) +
+  geom_boxplot(width = 0.3) +
+  labs(
+    x = "Track popularity category",
+    y = "Track duration (in seconds)",
+    title = "Track duration, per popularity category"
+  ) + 
+  scale_y_continuous(n.breaks = 10) +
+  scale_fill_discrete(name = "Popularity categories")
+```
+
+As seen, the track popularity **does not influence** enough
+in the duration of the tracks from this dataset. 
+
+Let's take a closer look at the popularity level vs duration
+comparison, now considering the quartiles of the tracks' popularity.
+
+```{r}
+summary(lib_tracks$popularity)
+```
+
+```{r}
+#| fig-align: center
+lib_tracks <- mutate(lib_tracks, popularity_levels = cut(
+  lib_tracks$popularity,
+  include.lowest = TRUE, 
+  breaks = unique(quantile(lib_tracks$popularity, na.rm = TRUE))
+))  
+lib_tracks |>
+  ggplot(aes(
+    x = popularity_levels, y = duration_ms / 1000,
+    fill = popularity_levels
+  )) +
+  geom_violin(trim = FALSE) +
+  geom_boxplot(width = 0.3) +
+  labs(
+    x = "Track popularity categories",
+    y = "Track duration (in seconds)",
+    title = "Track duration, per popularity category"
+  ) + 
+  scale_y_continuous(n.breaks = 10) +
+  scale_fill_discrete(
+    name = "Popularity categories\n(equivalent forms)",
+  )
+```
+
+#### Remarks
+
+- More than half of the songs in my library last 
+less than 5 minutes. That's certainly unexpected.
+
+- Almost half of the songs from my library have a 
+Spotify popularity of zero, the smalles value possible.
+
+- I expected that almost all of the **non-popular songs** in my library would be from Jazz, but, due to the Jazz songs I usually listen to, that would imply that the median duration of my library's non-popular songs 
+is much greater than the median duration of my 
+library's popular songs; which does not match reality. \
+It may be useful to solve such **mistery** via analizing 
+which **music genres** are my library's non popular songs from.
+
+- Due to these findings, let's retrieve more data about the tracks:
+    - Album release date (approximate track release date)
+    - Track artist's genres
+    - Track artist's popularity
+    - Track artist's number of Spotify followers
+this may require me retrieve the **Spotify album identifier** for each
+track, which I'll use to retrieve the album release date; besides the
+**Spotify artist identifer**, which I'll use to retrieve the artist's
+musical genres, their popularity and their number of followers.
+
+#### Further Spotify data retrieval
+
+```{r}
+#| eval: false
+## This code chunk is not executed during Quarto render
+# Add album.release_date and artist.id to tracks dataset
+lib_tracks <- cbind(
+  lib_tracks, 
+  retrieve(
+    spotifyr::get_tracks, c("album.release_date", "album.artists"), 
+    lib_tracks$uri
+  ) |> 
+    # Extract year 
+    mutate(album.release_date = as.integer(stringr::str_sub(
+      album.release_date, end = 4L
+    ))) |>
+    rename(album.release_year = album.release_date)
+) |> 
+  # Retreive artist.id from album.artists lists
+  mutate(album.artists = sapply(album.artists,
+    function (el) {
+      stringr::str_sub(
+        el[[1]][1], 
+        start = 1 + nchar("https://api.spotify.com/vi/artists/")
+      )
+    }
+  )) |> 
+  rename(artist.id = album.artists)
+
+# After future inspection, the album.release_year should be categorized
+lib_tracks <- mutate(lib_tracks, album.release_year_category = 
+  cut(lib_tracks$album.release_year, 
+    include.lowest = TRUE,
+    breaks = unique(quantile(lib_tracks$album.release_year, na.rm = TRUE))
+  )
+) |> 
+  # Move album.release_year_category next to album.release_year
+  select(artist:album.release_year, album.release_year_category, artist.id)
+
+# Retrieve artists' features
+lib_tracks <- cbind(
+  lib_tracks, 
+  retrieve(
+    spotifyr::get_artists, 
+    c("genres", "popularity", "followers.total"),
+    lib_tracks$artist.id
+  ) |> 
+    rename(
+      artist.genres = genres,
+      artist.popularity = popularity,
+      artist.number_of_followers = followers.total
+    )
+)
+# Update data frame
+data.table::fwrite(lib_tracks, file = "./data-frames/library_tracks.csv")
+```
+
+<details closed>
+<summary>Definitions of this dataset's variables</summary>
+Source: <https://rpubs.com/PeterDola/SpotifyTracks>
+
+- **Acousticness**: Numerical, Confidence measure from 0.0 to 1.0 of whether the track is acoustic. 1.0 represents high confidence the track is acoustic.
+
+- **Danceability**: Numerical, danceability describes how suitable a track is for dancing based on a combination of musical elements including tempo, rhythm stability, beat strength, and overall regularity. A value of 0.0 is least danceable and 1.0 is most danceable.
+
+- **Duration_ms**: Numerical, the duration of the track in milliseconds.
+
+- **Energy**: Numerical, Energy is a measure from 0.0 to 1.0 and represents a perceptual measure of intensity and activity. Typically, energetic tracks feel fast, loud, and noisy. For example, death metal has high energy, while a Bach prelude scores low on the scale. Perceptual features contributing to this attribute include dynamic range, perceived loudness, timbre, onset rate, and general entropy.
+
+- **Id**: The Spotify ID for the track.
+
+- **Instrumentalness**: Numerical, predicts whether a track contains no vocals. “Ooh” and “aah” sounds are treated as instrumental in this context. Rap or spoken word tracks are clearly “vocal”. The closer the instrumentalness value is to 1.0, the greater likelihood the track contains no vocal content. Values above 0.5 are intended to represent instrumental tracks, but confidence is higher as the value approaches 1.0.
+
+- **Liveness**: Numerical, detects the presence of an audience in the recording. Higher liveness values represent an increased probability that the track was performed live. A value above 0.8 provides strong likelihood that the track is live.
+
+- **Loudness**: Numerical, Overall loudness of a track in decibels (dB). Loudness values are averaged across the entire track and are useful for comparing relative loudness of tracks. Loudness is the quality of a sound that is the primary psychological correlate of physical strength (amplitude). Values typical range between -60 and 0 db.
+
+- **Popularity**: Numerical, the popularity of a track is a value between 0 and 100, with 100 being the most popular. The popularity is calculated by algorithm and is based, in the most part, on the total number of plays the track has had and how recent those plays are.
+
+- **Release_date**: Date the song was released.
+
+- **Speechiness**: Numerical, speechiness detects the presence of spoken words in a track. The more exclusively speech-like the recording (e.g. talk show, audio book, poetry), the closer to 1.0 the attribute value. Values above 0.66 describe tracks that are probably made entirely of spoken words. Values between 0.33 and 0.66 describe tracks that may contain both music and speech, either in sections or layered, including such cases as rap music. Values below 0.33 most likely represent music and other non-speech-like tracks.
+
+- **Tempo**: Numerical, Overall estimated tempo of a track in beats per minute (BPM). In musical terminology, tempo is the speed or pace of a given piece and derives directly from the average beat duration.
+
+- **Valence**: Numerical, Measure from 0.0 to 1.0 describing the musical positiveness conveyed by a track. Tracks with high valence sound more positive (e.g. happy, cheerful, euphoric), while tracks with low valence sound more negative (e.g. sad, depressed, angry).
+</details>
+
+```{r}
+# Get updated dataset
+lib_tracks <- select(
+  read.csv(file = "./data-frames/library_tracks.csv"),
+  artist:artist.number_of_followers
+)
+DT::datatable(lib_tracks)
+```
+
+#### Separating by music genre
+
+```{r}
+#| code-summary: missing-values
+knitr::kable(
+  t(sapply(lib_tracks, \(col) sum(is.na(col)))),
+  caption = "Number of missing values per column"
+)
+```
+
+However, notice, from the previous interactive table,
+that some data frame entries have `""` as a value, which
+should be interpreted as `NA`. Let's fix that.
+
+```{r}
+#| code-summary: recognize-missing-values
+lib_tracks <- mutate_if(lib_tracks, 
+  is.character,
+  \(col) sapply(col, \(el) ifelse(nchar(el)>0, el, as.character(NA)))
+)
+knitr::kable(
+  t(sapply(lib_tracks, \(col) sum(is.na(col)))),
+  caption = "Number of missing values per column"
+)
+```
+
+Before categorizing the tracks by music genre,
+let's explore the proportions of the genres in the dataset.
+
+**Note from the future:** The genre *hip-hop* is labelled as *hip hop*
+in this dataset, but this creates a slight confusion with other genres
+which incude *hop* yet not *hip*. \
+We can deal with this via replacing *hip hop* with *hip-hop*.
+
+```{r}
+lib_tracks <- mutate(lib_tracks, artist.genres = 
+  sapply(artist.genres,
+    \(genres) stringr::str_replace_all(genres, "hip hop", "hip-hop")
+  )
+)
+```
+
+```{r}
+#| code-summary: extract-music-genres
+lib_genres <- sapply(lib_tracks$artist.genres,
+  \(genres) ifelse(is.na(genres), genres, stringr::str_split(genres, "\\|"))
+)
+knitr::kable(
+  t(round(sort(100 * prop.table(table(unlist(lib_genres))), TRUE), 2)),
+  caption = "Percentages of tracks' music genre"
+)
+```
+
+Note that the genre's proportions are too spread out. 
+Besides, many genres are similar, for example, jazz saxophone and jazz trumpet.
+For that reason, I'll recategorize the `lib_genres` variable via the **types** of genres, considering the 
+**most common genre types**, via counting the ocurrence
+of the words (`c("jazz", "saxophone")`, for example) in each genre from the `lib_genres`, into the **nonunique** genres from `lib_genres`. 
+Judging from the types of genres in `lib_genres`,
+separating the words via a **space**, instead of a dash (\-),
+seems appropriate.
+
+```{r}
+unique_tracks_genres <- unique(na.omit(unlist(lib_genres)))
+genre_types_Tracks_percentages <- sort(decreasing = TRUE,
+  x = sapply(
+    # Unique genre "types"
+    unique(unlist(sapply(
+      unique_tracks_genres, 
+      \(genre) stringr::str_split(genre, " "),
+      USE.NAMES = FALSE
+    ))),
+    # Percentage of rows with non missing value of music genre,
+    # which have at least some genre with at least one genre type
+    # that matches the specified (currently considered) genre type.
+    function(genre_type) {
+      mean(sapply(
+        # For every row of lib_tracks, with no "NA" in artist.genre
+        lib_genres[!is.na(lib_genres)],
+        function(row_genres) {
+          # Does this genre type match with any of the
+          # genre types obtained from this row's music genre?
+          any(sapply(
+            row_genres,
+            \(genre) genre_type %in% stringr::str_split(genre, " ")[[1]]
+          ))
+        }
+      )) * 100
+    }
+  )
+)
+knitr::kable(
+  t(round(genre_types_Tracks_percentages, 2)),
+  caption = "Percentages of tracks' music genre 'type', across all tracks"
+)
+```
+
+Note that genres type like **saxophone** may seem in high proportion
+if such type only happes (in this dataset) for jazz songs. 
+In such case, a genre type cateogry of *saxophone* would not make
+much sense ... it should be a **jazz**  category instead.
+
+To shed light on this, let's calculate the proportion of genre
+*types* among all **unique** genres in the tracks dataset.
+
+```{r}
+genre_types_Genres_percentages <- sort(decreasing = TRUE,
+  x = sapply(
+    # Unique genre "types"
+    unique(unlist(sapply(
+      unique_tracks_genres, 
+      \(genre) stringr::str_split(genre, " "),
+      USE.NAMES = FALSE
+    ))),
+    # Percentage of music genres whose decomposition into genre types
+    # contains the specified (currently considered) genre type.
+    function(genre_type) {
+      mean(sapply(
+        unique_tracks_genres,
+        \(genre) genre_type %in% stringr::str_split(genre, " ")[[1]]
+      )) * 100
+    }
+  )
+)
+knitr::kable(
+  t(round(genre_types_Genres_percentages, 2)),
+  caption = "Percentages of tracks' music genre 'type', across all (unique) genres"
+)
+```
+
+```{r}
+#| code-summary: percentages-comparisons
+# Alphabetically sort the genre types, then merge.
+genre_types <- names(genre_types_Genres_percentages) |> sort()
+genre_types_percentages <- data.frame(
+  genre_type = genre_types,
+  percent_across_tracks = genre_types_Tracks_percentages[genre_types],
+  percent_across_genres = genre_types_Genres_percentages[genre_types],
+  row.names = NULL
+) |>
+  mutate(percentage_ratio = percent_across_genres / percent_across_tracks)
+DT::datatable(genre_types_percentages, filter = "top")
+```
+
+For each track in the dataset, now I'll consider the genre types
+obtained from its `artists.genre` column, and chose the genre type
+with greatest proportion among all tracks. This chosen genre type
+will serve as a **music genre representative** of the track in question.
+
+```{r}
+tracks.estimated_genre_type <- c()
+for (row in lib_genres) {
+  if (is.na(row[1])) {
+    tracks.estimated_genre_type <- append(tracks.estimated_genre_type, as.character(NA))
+  } else {
+    g_types <- unlist(stringr::str_split(row, " "))
+    # Genre "type" with maximum percentage
+    tracks.estimated_genre_type <- append(tracks.estimated_genre_type,
+      names(which.max(genre_types_Tracks_percentages[g_types]))
+    )
+  }
+}
+knitr::kable(
+  t(100 * sort(round(prop.table(table(tracks.estimated_genre_type)), 2), TRUE))
+)
+```
+
+Judging from the percentages obtained in the last table,
+I'll recategorize `tracks.estimated_genre_type` as either 
+**jazz, alternative dance, indie, pop, other**.
+
+```{r}
+lib_tracks <- mutate(lib_tracks,
+  estimated_genre_type = tracks.estimated_genre_type,
+  genre_category = case_when(
+    is.na(estimated_genre_type) ~ "Not Assigned",
+    !(estimated_genre_type %in% 
+      c("jazz", "alternative", "dance", "indie", "pop")
+    ) ~ "other",
+    TRUE ~ estimated_genre_type
+  )
+)
+DT::datatable(lib_tracks)
+```
+
+```{r}
+#| code-summary: separate-variable-types
+# Update data frame
+data.table::fwrite(lib_tracks, file = "./data-frames/library_tracks.csv")
+# Numeric variables
+data.table::fwrite(
+  select(lib_tracks,
+    duration_ms, popularity, danceability, 
+    energy, loudness, speechiness, 
+    acousticness, instrumentalness, liveness, 
+    valence, tempo, album.release_year,
+    artist.popularity, artist.number_of_followers
+  ),
+  file = "./data-frames/library_tracks_num.csv"
+)
+# Categorical variables
+data.table::fwrite(
+  select(lib_tracks,
+    artist, album, track, uri,
+    time_signature, popularity_levels, 
+    album.release_year_category, artist.id, artist.genres,
+    estimated_genre_type, genre_category
+  ),
+  file = "./data-frames/library_tracks_cat.csv"
+)
+```
+
+#### Interactive data exploration
+
+```{ojs}
+//| code-fold: false
+// Load numeric and categorical variables from lib_tracks
+import { aq, op} from '@uwdata/arquero'
+
+tracks = aq.loadCSV("./data-frames/library_tracks.csv")
+tracks_num = aq.loadCSV("./data-frames/library_tracks_num.csv")
+// Do not consider columns with (almost) unique values
+temp = aq.loadCSV("./data-frames/library_tracks_cat.csv")
+tracks_cat = temp.select(aq.not(
+  'artist', 'album', 'track', 'uri', 
+  'artist.id', 'artist.genres'
+))
+```
+
+
+::: {.grid #lib-inputs}
+
+::: {.g-col-6}
+```{ojs}
+//| echo: false
+//| code-fold: false
+//| panel: sidebar
+viewof num_track_feature_1 = Inputs.select(
+  Array.from(tracks_num._names).sort(),
+  {value: "acousticness" , label: "Track numerical feature:"}
+)
+
+viewof cat_track_feature_1 = Inputs.select(
+  Array.from(tracks_cat._names).sort(),
+  {value: "genre_category" , label: "Track categorical feature:"}
+)
+```
+:::
+
+::: {.g-col-6}
+```{ojs}
+//| echo: false
+//| code-fold: false
+//| panel: sidebar
+viewof num_track_feature_2 = Inputs.select(
+  Array.from(tracks_num._names).sort(),
+  {value: "loudness" , label: "Track numerical feature:"}
+)
+
+viewof cat_track_feature_2 = Inputs.select(
+  Array.from(tracks_cat._names).sort(),
+  {value: "album.release_year" , label: "Track categorical feature:"}
+)
+```
+:::
+
+:::
+
+::: {.panel-tabset}
+
+## Boxplot 
+
+```{ojs}
+//| echo: false
+//| code-fold: false
+Plot.plot({
+  y: {
+    grid: true,
+    inset: 6
+  },
+  marks: [
+    Plot.boxY(tracks, {x: cat_track_feature_1, y: num_track_feature_1})
+  ]
+})
+```
+
+## Scatter plot
+
+```{ojs}
+//| echo: false
+//| code-fold: false
+Plot.plot({
+  marks: [
+    Plot.dot(tracks, {x: num_track_feature_1, y: num_track_feature_2})
+  ]
+})
+```
+
+## Bar plot
+
+```{ojs}
+//| echo: false
+//| code-fold: false
+Plot.plot({
+  marginLeft: 35,
+  color: {legend: true},  // Include legend
+  y: {label: "  Percentage (%)", grid: true, percent: true, domain: [0, 100]},
+  marks: [
+    Plot.barY(tracks,
+      Plot.groupX(
+        {y: "proportion"}, 
+        {
+          x: cat_track_feature_1, fill: cat_track_feature_2, 
+          sort: {x: "y", reverse: false}, 
+          // HTML <title> element for rectangles in barplot
+          title: (d) => "Frequency:"
+        }
+      )
+    ),
+    Plot.ruleY([0]),  // x-axis
+    Plot.text([`${cat_track_feature_1} vs ${cat_track_feature_2}`], 
+    {frameAnchor: "top"})
+  ]
+})
+```
+::: 
+
+#### Conclusions
+
+After exploring the previous interactive graphics,
+these are my findings/conclusions, by data comparison:
+
+<ul>
+<li>
+<p>Boxplot</p>
+<dl>
+<dt>acousticness vs genre_category</dt>
+<dd>
+  Apart from the **Not assigned** and **jazz** genre categories,
+  all tracks from my Spotify 2022 library have very low acousticness.
+</dd>
+<dt>album.release_year vs genre_category</dt>
+<dd>
+  The tracks from my Spotify 2022 library which were released before
+  the year 2000, tend to be exclusively from the **jazz** genre category.
+</dd>
+<dt>energy vs genre_category</dt>
+<dd>
+  The **low energy** tracks from my Spotify 2022 library tend to be
+  exclusively from the **Not assigned** or **jazz** genre categories.
+</dd>
+<dt>popularity vs genre_category</dt>
+<dd>
+  All of the tracks from my Spotify 2022 library have tend to have 
+  very low popularity. Besides this, the tracks from the genre categories 
+  **Not assigned**, **indie**, **alternative** or **jazz** tend to have
+  **extremely low popularity**.
+</dd>
+</dl>
+</li>
+
+<li>
+<p>Scatter plot</p>
+<dl>
+<dt>acousticness vs energy</dt>
+<dd>
+  The graph reveals a clear **negative correlation**
+  (`r round(cor(lib_tracks$acousticness, lib_tracks$energy), 2)`) between
+  acousticness and energy.
+  This is consistent with the findings from these boxplots:
+  acousticnes vs genre_category and energy vs genre_category.
+</dd>
+<dt>acousticness vs loudness</dt>
+<dd>
+  The graph reveals a clear **negative correlation** 
+  (`r round(cor(lib_tracks$acousticness, lib_tracks$loudness), 2)`) between
+  acousticness and loudness, with a **stronger linear relationship** 
+  than in the acousticness vs energy scatter plot.
+</dd>
+<dt>artist.popularity vs artist.number_of_followers</dt>
+<dd>
+  The graph greatly resembles an increasing **exponential function**.
+  The correlation between the artist.popularity and the natural
+  logarithm of the artist.number_of_followers is 
+  `r round(cor(lib_tracks$artist.popularity, log(lib_tracks$artist.number_of_followers)), 2)`.
+</dd>
+<dt>energy vs loudness</dt>
+<dd>
+  Not only does the graph reveal a clear 
+  **positive correlation** (`r round(cor(lib_tracks$energy, lib_tracks$loudness), 2)`) between
+  energy and loudness, it also seems to trace a **cubic polynomial** shape.
+</dd>
+<dt>valence vs danceability</dt>
+<dd>
+  The graph reveals a **positive correlation** 
+  (`r round(cor(lib_tracks$valence, lib_tracks$danceability), 2)`) between valence
+  and danceability, which is to be expected, because *happy*songs (high valence)
+  tend to me more *danceable* (high danceability). \
+  However, at least in my case, I expected a 
+  **negative correlation** between valence and danceability, due to the fact that 
+  I don't listen to many *danceable* songs, the exception being mainly **Tango**
+  songs, which are usually *sad* (low valence) ... I don't listen to *happy Tango* (milonga). \
+  Note that the tracks from my Spotify 2022 library which include **Tango** as a genre
+  type represent only $0.11$% of the total number of library tracks. Therefore,
+  such a small percentage of *low valence high danceability* tracks 
+  (assuming Spotify correctly assigned such numbers) explains the **positive correlation** 
+  obtained, instead of the **negation correlation** expected.
+</dd>
+</dl>
+</li>
+
+<li>
+<p>Bar plot</p>
+<dl>
+<dt>album.release_year_category vs popularity_levels</dt>
+<dd>
+  Among every category of the album's release year,
+  more than half of the tracks in such categories were
+  non popular (popularity between 0 and 24).
+</dd>
+<dt>album.release_year_category vs genre_category</dt>
+<dd>
+- Virtually zero tracks (precisely 2) from my Spotify 2022 library 
+whose album was released between 1957 and 2010 have a pop genre category.
+<!-- 
+  lib_tracks |>
+    filter(genre_category == "pop") |>
+    filter(album.release_year_category %in% c("[1957,2002]", "(2002,2010]")) |>
+    count()
+-->
+- The percentage (among each category of the albums' release year) 
+of tracks with jazz genre category was highest (60.3%) for the oldest time period 
+(`[1957,2002]`), and lowest (21.0%) for the most recent time period (`(2015,2022]`).
+<!-- 
+  lib_tracks |>
+    group_by(album.release_year_category) |>
+    summarise(jazz_percentage_0_100 = 100 * prop.table(table(genre_category))["jazz"]) 
+-->
+- The more recent the album release year category, the more diverse becomes the genre categories of the tracks.
+</dd>
+<dt>popularity_levels vs genre_category</dt>
+<dd>
+  One may expect that among the most popular songs one listens to,
+  the majority of them are pop, due to the popularity, by definition,
+  of such genre. In my case, that pattern does **not occur**. \
+  Among the most popular (popularity between 24 and 85) tracks in my
+  Spotify 2022 library, only $4.17$% of them had pop as genre type.
+<!-- 
+  temp_df <- lib_tracks |>
+    group_by(popularity_levels) |>
+    summarise(n_tracks = n()) |>
+    arrange(popularity_levels)
+  for (genre_cat in unique(lib_tracks$genre_category)) {
+    temp_df <<- merge(temp_df, 
+      lib_tracks |>
+        group_by(popularity_levels) |>
+        summarise({{genre_cat}} := table(genre_category)[genre_cat]) |>
+        arrange(popularity_levels)
+    )
+  }
+  # Genre type percentage across popularity levels 
+  mutate(temp_df, across(alternative:pop, \(x) 100 * x / n_tracks))
+-->
+</dd>
+<dt>popularity_levels vs album.release_year_category</dt>
+<dd>
+  I suspected that, among the non popular tracks 
+  (popularity between 0 and 1), the majority of them would
+  have had their album year in the oldest category (`[1957, 2002]`).
+  This due to my believe that the non popular tracks would be old jazz songs. \
+<!--
+  lib_tracks |>
+    filter(genre_category == "jazz") |>
+    group_by(album.release_year_category) |>
+    summarise(percent_across_all_tracks = 
+      100 * n() / nrow(filter(lib_tracks, genre_category == "jazz"))
+    )
+-->
+  However, among the non popular tracks (popularity between 0 and 1),
+  $40.4$% of them are from `(2002,2010]`, and only $20.6$% of
+  them are from the oldest period (`[1957, 2002]`).
+<!-- 
+  lib_tracks |>
+    filter(popularity_levels == "[0,1]") |>
+    group_by(album.release_year_category) |>
+    summarise(percentage = 
+      100 * n() / nrow(filter(lib_tracks, popularity_levels == "[0,1]"))
+    ) |>
+    arrange(desc(percentage))
+-->
+</dd>
+<dt>genre_category vs album.release_year_category</dt>
+<dd>
+  Among all genre categories, the percentage of **old tracks** 
+  (tracks whose album was released between 1957 and 2002) is
+  **smaller** than $30$%, except only for the *jazz genre type*, 
+  where such percentage is approximately $40$%.
+<!-- 
+  lib_tracks |>
+    group_by(genre_category) |>
+    summarise(old_songs_percent_across_genre = ifelse(
+      is.na(table(album.release_year_category)["[1957,2002]"]),
+      0,
+      100 * prop.table(table(album.release_year_category))["[1957,2002]"]
+    )) |>
+    arrange(desc(old_songs_percent_across_genre))
+-->
+</dd>
+</ul>
+
+
+### My library albums

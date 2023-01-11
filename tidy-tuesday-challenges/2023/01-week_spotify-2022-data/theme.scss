@@ -1,0 +1,98 @@
+/*-- scss:defaults --*/
+
+/*-- scss:rules --*/
+// Import Google's Tangerine font for headings
+@import url('https://fonts.googleapis.com/css2?family=Tangerine:wght@700&display=swap');
+h1, h2, h3, h4 {
+  font-size: 300%;
+  color: skyblue;
+  font-family: 'Tangerine', serif;
+}
+
+// Increase main content's width
+main {
+  width: calc(100vw - 200px);
+  min-width: 600px;
+}
+#quarto-margin-sidebar {
+  padding-left: 1rem;
+  transition: height, 350ms;
+  &:not(:has(*:hover)) { height: 3rem; }
+  &:has(*:hover) { background-color: black; }
+}
+
+// Customize Table Of Contents
+#TOC {
+  position: absolute;
+  top: 0;
+  // Change text style
+  opacity: 0.3;
+  color: var(--quarto-body-bg);
+  filter: invert(1);
+  // Fix color of toc anchors
+  a.active { filter: invert(1); 
+  }
+  // Hide toc, except for its title,
+  // except when toc or some of its
+  // descendants gets hovered.
+  &:hover, &:hover * {
+    opacity: 1;
+    transition: opacity 250ms;
+  }
+  &:not(:hover) *:not(#toc-title) {
+    display: none;
+  }
+}
+#toc-title {    
+  color: white;
+  font-size: 111%;
+  filter: invert(1);
+}
+.sidebar nav[role=doc-toc]>ul a { border: none; }
+
+// Increase region size for main content of page
+@media only screen and (min-width: 800px) {
+  // main { margin-left: -6em; }
+}
+
+// Fix DT tables column name colors
+th.sorting, .dataTables_length,
+select[name^='DataTables_Table_'],
+.dataTables_filter,
+.dataTables_info {
+  color: white !important; 
+}
+.dataTables_paginate {
+  filter: invert(1) !important;
+}
+
+
+// Adjust table caption
+.table > caption {
+  text-align: left;
+  filter: invert(1);
+  color: var(--quarto-body-bg);
+}
+
+// Fill space for Observable's forms
+.observablehq form {
+  > label {
+    width: fit-content !important;
+  }
+  > select {
+    width: auto !important;
+  }
+}
+
+// Center Observable plots
+.observablehq svg { margin: auto; }
+// Center Observable legends
+.plot-c07472f0b139a { justify-content: center; }
+
+// Customize tabsets due to low deafult visibility
+.panel-tabset li.nav-item {
+  filter: invert(1);
+}
+
+// Make <dt> elements stand out more
+dt { color: yellow; }
