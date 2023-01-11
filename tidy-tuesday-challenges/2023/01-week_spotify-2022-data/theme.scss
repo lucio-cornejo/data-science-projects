@@ -14,14 +14,15 @@ main {
   width: calc(100vw - 200px);
   min-width: 600px;
 }
+
+// Customize Table Of Contents
 #quarto-margin-sidebar {
+  overflow: hidden;
   padding-left: 1rem;
   transition: height, 350ms;
   &:not(:has(*:hover)) { height: 3rem; }
   &:has(*:hover) { background-color: black; }
 }
-
-// Customize Table Of Contents
 #TOC {
   position: absolute;
   top: 0;
@@ -30,23 +31,29 @@ main {
   color: var(--quarto-body-bg);
   filter: invert(1);
   // Fix color of toc anchors
-  a.active { filter: invert(1); 
-  }
-  // Hide toc, except for its title,
-  // except when toc or some of its
-  // descendants gets hovered.
+  a.active { filter: invert(1); }
+  // Full opacity if the toc or
+  // some of its descendants is
+  // being hovered.
   &:hover, &:hover * {
     opacity: 1;
     transition: opacity 250ms;
   }
+  // When toc is not being hovered,
+  // hide all of its content,
+  // except its title.
   &:not(:hover) *:not(#toc-title) {
     display: none;
   }
 }
 #toc-title {    
+  filter: invert(1);
   color: white;
   font-size: 111%;
-  filter: invert(1);
+  padding: 5px 10px;
+  width: fit-content;
+  border-radius: 50px;
+  background-color: firebrick;
 }
 .sidebar nav[role=doc-toc]>ul a { border: none; }
 
