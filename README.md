@@ -2,15 +2,13 @@
 
 
 <details>
-<summary> 
-## Projects with Mgtr. Evelyn Gutierrez
-</summary>
+<summary>Projects with Mgtr. Evelyn Gutierrez</summary>
 
-I've included in this GitHub repository some of the
+I've included in this GitHub repository **some** of the
 projects I've had to work in, as a research assistant
 of Mgtr. Evelyn Gutierrez.
 
-### Description of projects included
+### Project's descriptions
 
 **Disclaimer:** These first two projects would have
 been uploaded online, but the confidentiality nature of
@@ -47,8 +45,12 @@ showcasing its functionalities.
 
 </details>
 
-## Tidy Tuesday Challenges
+<details>
+<summary>Tidy Tuesday Challenges</summary>
 
 ### Week 1 of 2023: Analysis of my Spotify 2022 data
+
+</details>
+
 
 
